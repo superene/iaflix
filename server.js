@@ -37,7 +37,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 } // 🔥 500MB tipo Netflix
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB
 })
 
 /* =========================
@@ -123,7 +123,7 @@ function auth(req, res, next) {
 }
 
 /* =========================
-   👤 ME (usuario + perfil)
+   👤 ME
 ========================= */
 app.get("/me", auth, async (req, res) => {
   try {
@@ -141,6 +141,18 @@ app.get("/me", auth, async (req, res) => {
   } catch {
     res.status(500).json({})
   }
+})
+
+/* =========================
+   👤 CAMBIAR PERFIL
+========================= */
+app.post("/perfil", auth, async (req, res) => {
+  const user = await User.findById(req.user.id)
+
+  user.perfilActivo = req.body.nombre
+  await user.save()
+
+  res.json({ ok: true })
 })
 
 /* =========================
@@ -197,7 +209,6 @@ app.delete("/serie/:id", auth, async (req, res) => {
     const serie = await Serie.findById(req.params.id)
     if (!serie) return res.status(404).json({ mensaje: "No existe" })
 
-    // borrar archivos
     const portadaPath = path.join(__dirname, "uploads", path.basename(serie.portada))
     const videoPath = path.join(__dirname, "uploads", path.basename(serie.video))
 
@@ -236,7 +247,7 @@ app.get("/favoritos", auth, async (req, res) => {
 })
 
 /* =========================
-   🎬 HISTORIAL (CONTINUAR VIENDO)
+   🎬 HISTORIAL
 ========================= */
 app.post("/historial/:id", auth, async (req, res) => {
   const user = await User.findById(req.user.id)
@@ -264,8 +275,10 @@ app.get("/historial", auth, async (req, res) => {
 })
 
 /* =========================
-   🚀 SERVER
+   🚀 SERVER (PRODUCCIÓN)
 ========================= */
-app.listen(3000, () => {
-  console.log("🔥 http://localhost:3000")
+const PORT = process.env.PORT || 3000
+
+app.listen(PORT, () => {
+  console.log("🔥 servidor corriendo en puerto " + PORT)
 })

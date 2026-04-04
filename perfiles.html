@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Perfiles</title>
+
+<style>
+body {
+  background:black;
+  color:white;
+  text-align:center;
+  font-family:Arial;
+}
+
+.perfiles {
+  display:flex;
+  justify-content:center;
+  gap:40px;
+  margin-top:100px;
+}
+
+.perfil {
+  cursor:pointer;
+  font-size:20px;
+}
+
+.perfil:hover {
+  transform:scale(1.1);
+}
+</style>
+</head>
+
+<body>
+
+<h1>¿Quién está viendo?</h1>
+
+<div id="perfiles" class="perfiles"></div>
+
+<script>
+const token = localStorage.getItem("token")
+
+fetch("http://localhost:3000/me",{
+  headers:{ Authorization:"Bearer "+token }
+})
+.then(r=>r.json())
+.then(user=>{
+  const cont = document.getElementById("perfiles")
+
+  user.perfiles.forEach(p=>{
+    const div = document.createElement("div")
+
+    div.className="perfil"
+    div.innerHTML = `
+      <div style="font-size:60px">${p.avatar}</div>
+      <p>${p.nombre}</p>
+    `
+
+    div.onclick = async ()=>{
+      await fetch("http://localhost:3000/perfil",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          Authorization:"Bearer "+token
+        },
+        body: JSON.stringify({ nombre:p.nombre })
+      })
+
+      window.location.href="index.html"
+    }
+
+    cont.appendChild(div)
+  })
+})
+</script>
+
+</body>
+</html>

@@ -1,0 +1,24 @@
+# 🔥 dependencias
+node_modules/
+
+# 🔐 variables privadas
+.env
+
+# 📂 archivos pesados (videos, imágenes)
+uploads/
+
+# 🗑 logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# 🍎 mac
+.DS_Store
+
+# 🧠 editores
+.vscode/
+.idea/
+
+# ⚙️ builds
+dist/
+build/
