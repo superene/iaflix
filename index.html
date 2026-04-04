@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Streaming PRO</title>
+
+<style>
+body {
+  margin:0;
+  font-family:Arial;
+  color:white;
+
+  /* 🔥 FONDO IA */
+  background: url("ia.jpg") no-repeat center center fixed;
+  background-size: cover;
+}
+
+/* 🔥 CAPA OSCURA (NETFLIX STYLE) */
+body::before {
+  content:"";
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.7);
+  z-index:-1;
+}
+
+/* SIDEBAR */
+.sidebar {
+  position:fixed;
+  width:220px;
+  height:100%;
+  background:rgba(0,0,0,0.9);
+  padding-top:20px;
+  backdrop-filter: blur(10px);
+}
+
+.sidebar input {
+  width:80%;
+  margin:10px;
+  padding:8px;
+  border-radius:5px;
+  border:none;
+}
+
+.sidebar ul {
+  list-style:none;
+  padding:0;
+}
+
+.sidebar li {
+  padding:15px;
+  cursor:pointer;
+  border-bottom:1px solid #222;
+}
+
+.sidebar li:hover {
+  background:#222;
+}
+
+/* MAIN */
+.main {
+  margin-left:220px;
+}
+
+/* HERO */
+.hero {
+  height:60vh;
+  display:flex;
+  align-items:end;
+  padding:30px;
+}
+
+.hero-content {
+  background:rgba(0,0,0,0.6);
+  padding:20px;
+  border-radius:10px;
+}
+
+/* ROW */
+.row {
+  margin:20px;
+}
+
+.row-posters {
+  display:flex;
+  gap:10px;
+  overflow-x:auto;
+}
+
+.poster video {
+  width:150px;
+  border-radius:8px;
+  cursor:pointer;
+  transition:0.3s;
+}
+
+.poster video:hover {
+  transform:scale(1.1);
+}
+
+/* PLAYER */
+#player {
+  width:80%;
+  margin:20px;
+  border-radius:10px;
+}
+
+/* BOTONES */
+button {
+  padding:10px 15px;
+  margin:5px;
+  cursor:pointer;
+  border:none;
+  border-radius:5px;
+  font-weight:bold;
+}
+
+.play { background:white; color:black; }
+.fav { background:gray; color:white; }
+</style>
+</head>
+
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+
+<input 
+  type="text" 
+  placeholder="🔍 Buscar..." 
+  oninput="buscarPro(this.value)"
+>
+
+<div id="sugerencias"></div>
+
+<ul>
+<li onclick="inicio()">🏠 Inicio</li>
+<li onclick="filtrar('serie')">🎬 Series</li>
+<li onclick="filtrar('pelicula')">🎥 Películas</li>
+<li onclick="filtrar('musica')">🎵 Música</li>
+<li onclick="filtrar('anime')">🧩 Anime</li>
+<li onclick="verFavoritos()">⭐ Favoritos</li>
+<li onclick="verHistorial()">🕓 Historial</li>
+</ul>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+<h2 style="padding:10px;">👤 <span id="user"></span></h2>
+
+<div id="hero" class="hero">
+  <div class="hero-content">
+    <h1 id="titulo"></h1>
+    <p id="desc"></p>
+
+    <button class="play" onclick="play()">▶️ Play</button>
+    <button class="fav" onclick="fav()">⭐ Favorito</button>
+  </div>
+</div>
+
+<div class="row">
+  <h2>Tendencias</h2>
+  <div id="lista" class="row-posters"></div>
+</div>
+
+<video id="player" controls></video>
+
+</div>
+
+<script>
+const token = localStorage.getItem("token")
+
+if(!token){
+  location.href="login-user.html"
+}
+
+let todas = []
+let actual = null
+
+// USER
+fetch("http://localhost:3000/me",{
+  headers:{ Authorization:"Bearer "+token }
+})
+.then(r=>r.json())
+.then(d=>user.innerText=d.username)
+
+// CARGAR
+fetch("http://localhost:3000/series")
+.then(r=>r.json())
+.then(data=>{
+  todas=data
+  render(data)
+  if(data.length) select(data[0])
+})
+
+// RENDER
+function render(data){
+  lista.innerHTML=""
+
+  data.forEach(s=>{
+    const div=document.createElement("div")
+    div.className="poster"
+
+    div.innerHTML=`<video src="${s.video}" muted loop></video>`
+
+    const video = div.querySelector("video")
+
+    div.onmouseenter=()=>video.play().catch(()=>{})
+    div.onmouseleave=()=>{
+      video.pause()
+      video.currentTime=0
+    }
+
+    div.onclick=()=>select(s)
+
+    lista.appendChild(div)
+  })
+}
+
+// SELECT
+function select(s){
+  actual=s
+  titulo.innerText=s.titulo
+  desc.innerText=s.descripcion
+}
+
+// PLAY
+function play(){
+  if(!actual) return
+
+  player.pause()
+  player.src=actual.video
+
+  setTimeout(()=>{
+    player.play().catch(()=>{})
+  },100)
+
+  fetch("http://localhost:3000/historial/"+actual._id,{
+    method:"POST",
+    headers:{ Authorization:"Bearer "+token }
+  })
+}
+
+// FAVORITO
+function fav(){
+  fetch("http://localhost:3000/favoritos/"+actual._id,{
+    method:"POST",
+    headers:{ Authorization:"Bearer "+token }
+  })
+}
+
+// BUSCAR PRO
+function buscarPro(texto){
+  texto=texto.toLowerCase()
+  const sug=document.getElementById("sugerencias")
+
+  if(!texto){
+    sug.innerHTML=""
+    render(todas)
+    return
+  }
+
+  const filtradas=todas.filter(s =>
+    s.titulo.toLowerCase().includes(texto) ||
+    (s.descripcion && s.descripcion.toLowerCase().includes(texto)) ||
+    (s.tipo && s.tipo.toLowerCase().includes(texto))
+  )
+
+  render(filtradas)
+
+  sug.innerHTML=""
+  filtradas.slice(0,5).forEach(s=>{
+    const div=document.createElement("div")
+    div.style.padding="10px"
+    div.innerHTML=`🎬 ${s.titulo}`
+    div.onclick=()=>select(s)
+    sug.appendChild(div)
+  })
+}
+
+// FILTROS
+function filtrar(tipo){
+  render(todas.filter(s=>s.tipo===tipo))
+}
+
+function inicio(){ render(todas) }
+
+// FAVORITOS
+function verFavoritos(){
+  fetch("http://localhost:3000/favoritos",{headers:{Authorization:"Bearer "+token}})
+  .then(r=>r.json())
+  .then(render)
+}
+
+// HISTORIAL
+function verHistorial(){
+  fetch("http://localhost:3000/historial",{headers:{Authorization:"Bearer "+token}})
+  .then(r=>r.json())
+  .then(d=>render(d.map(h=>h.serie)))
+}
+</script>
+
+</body>
+</html>

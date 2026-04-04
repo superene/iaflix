@@ -1,0 +1,144 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background-color: #141414;
+  color: white;
+}
+
+/* Sidebar */
+.sidebar {
+  position: fixed;
+  width: 60px;
+  height: 100vh;
+  background-color: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 20px;
+}
+
+.logo {
+  width: 30px;
+  margin-bottom: 30px;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar li {
+  margin: 20px 0;
+  cursor: pointer;
+}
+
+/* Main */
+.main {
+  margin-left: 60px;
+}
+
+/* Hero */
+.hero {
+  height: 70vh;
+  background: url('/mnt/data/netflix.jpg') center/cover no-repeat;
+  display: flex;
+  align-items: flex-end;
+}
+
+.overlay {
+  padding: 40px;
+  max-width: 500px;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+}
+
+.overlay h1 {
+  font-size: 3rem;
+  margin: 0;
+}
+
+.overlay p {
+  margin: 10px 0;
+  font-size: 1rem;
+}
+
+/* Buttons */
+.buttons button {
+  margin-right: 10px;
+  padding: 10px 20px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.play {
+  background-color: white;
+  color: black;
+}
+
+.info {
+  background-color: rgba(109,109,110,0.7);
+  color: white;
+}
+
+/* Rows */
+.row {
+  padding: 20px;
+}
+
+.row h2 {
+  margin-bottom: 10px;
+}
+
+.row-posters {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.poster {
+  min-width: 150px;
+  height: 200px;
+  background-color: #333;
+  border-radius: 5px;
+  transition: transform 0.3s;
+}
+
+.poster:hover {
+  transform: scale(1.1);
+}
+
+body {
+  background: #111;
+  color: white;
+  font-family: Arial;
+}
+
+.row-posters {
+  display: flex;
+  gap: 10px;
+}
+
+.poster {
+  cursor: pointer;
+}
+
+.player {
+  margin-top: 20px;
+}
+
+video {
+  width: 600px;
+}
+
+.poster {
+  transition: transform 0.3s;
+}
+
+.poster:hover {
+  transform: scale(1.1);
+  z-index: 10;
+}
+
+#sugerencias div:hover {
+  background:#333;
+}

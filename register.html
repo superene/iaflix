@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Registro</title>
+
+<style>
+body {
+  margin:0;
+  background:#111;
+  color:white;
+  font-family:Arial;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+
+.container {
+  background:black;
+  padding:40px;
+  border-radius:10px;
+  width:320px;
+  text-align:center;
+}
+
+h2 {
+  margin-bottom:20px;
+}
+
+input {
+  width:100%;
+  padding:10px;
+  margin:10px 0;
+  border:none;
+  border-radius:5px;
+}
+
+button {
+  width:100%;
+  padding:10px;
+  background:red;
+  color:white;
+  border:none;
+  border-radius:5px;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+button:hover {
+  background:#e50914;
+}
+
+.error {
+  color:red;
+  margin-top:10px;
+}
+
+.success {
+  color:#00ff88;
+  margin-top:10px;
+}
+
+.link {
+  margin-top:15px;
+  display:block;
+  color:#aaa;
+  cursor:pointer;
+}
+
+.link:hover {
+  color:white;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>🎬 Crear cuenta</h2>
+
+  <form id="form">
+    <input type="text" id="username" placeholder="Usuario" required>
+    <input type="password" id="password" placeholder="Contraseña (mín 4)" required>
+    <button>Registrarse</button>
+  </form>
+
+  <p class="error" id="error"></p>
+  <p class="success" id="success"></p>
+
+  <span class="link" onclick="irLogin()">¿Ya tienes cuenta? Inicia sesión</span>
+</div>
+
+<script>
+function irLogin(){
+  window.location.href = "login-user.html"
+}
+
+document.getElementById("form").onsubmit = async (e) => {
+  e.preventDefault()
+
+  const username = document.getElementById("username").value.trim()
+  const password = document.getElementById("password").value.trim()
+
+  const error = document.getElementById("error")
+  const success = document.getElementById("success")
+
+  error.innerText = ""
+  success.innerText = ""
+
+  // validaciones
+  if (!username || !password) {
+    error.innerText = "Completa todos los campos"
+    return
+  }
+
+  if (password.length < 4) {
+    error.innerText = "La contraseña debe tener mínimo 4 caracteres"
+    return
+  }
+
+  try {
+    const res = await fetch("http://localhost:3000/register", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ username, password })
+    })
+
+    const data = await res.json()
+
+    if (res.ok) {
+      success.innerText = "✅ Cuenta creada correctamente"
+
+      setTimeout(() => {
+        window.location.href = "login-user.html"
+      }, 1000)
+
+    } else {
+      error.innerText = data.mensaje || "Error al registrar"
+    }
+
+  } catch (err) {
+    error.innerText = "Error conectando con el servidor"
+  }
+}
+</script>
+
+</body>
+</html>

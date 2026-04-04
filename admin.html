@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Panel Admin PRO</title>
+
+<style>
+body {
+  background:#111;
+  color:white;
+  font-family:Arial;
+  text-align:center;
+}
+
+h1 {
+  margin-top:30px;
+}
+
+form {
+  margin-top:30px;
+}
+
+input, textarea, select {
+  display:block;
+  margin:10px auto;
+  padding:10px;
+  width:300px;
+  border-radius:5px;
+  border:none;
+}
+
+button {
+  padding:10px 15px;
+  margin:5px;
+  background:red;
+  color:white;
+  border:none;
+  cursor:pointer;
+  border-radius:5px;
+  font-weight:bold;
+}
+
+button:disabled {
+  background:gray;
+}
+
+#preview img {
+  max-width:150px;
+  border-radius:5px;
+}
+
+.status {
+  margin-top:15px;
+  font-weight:bold;
+}
+
+.item {
+  border-bottom:1px solid #333;
+  padding:10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🎬 Panel Admin</h1>
+
+<!-- 📂 LISTA -->
+<h2>📂 Contenido subido</h2>
+<div id="listaAdmin"></div>
+
+<!-- 📤 FORM -->
+<form id="form">
+
+<input type="text" name="titulo" placeholder="Título" required>
+
+<textarea name="descripcion" placeholder="Descripción"></textarea>
+
+<select name="tipo" required>
+  <option value="">Selecciona tipo</option>
+  <option value="serie">Serie</option>
+  <option value="pelicula">Película</option>
+  <option value="musica">Música</option>
+  <option value="anime">Anime</option>
+</select>
+
+<label>Portada:</label>
+<input type="file" id="portadaInput" name="portada" accept="image/*" required>
+
+<div id="preview"></div>
+
+<label>Video:</label>
+<input type="file" name="video" accept="video/*" required>
+
+<button id="btnSubir" type="submit">Subir contenido</button>
+
+<div class="status" id="status"></div>
+
+</form>
+
+<script>
+const token = localStorage.getItem("token")
+
+/* =========================
+   🔐 VALIDAR LOGIN
+========================= */
+if (!token) {
+  alert("Debes iniciar sesión como admin")
+  window.location.href = "login.html"
+}
+
+/* =========================
+   📺 LISTAR CONTENIDO
+========================= */
+async function cargarContenido() {
+  const res = await fetch("http://localhost:3000/series")
+  const data = await res.json()
+
+  const cont = document.getElementById("listaAdmin")
+  cont.innerHTML = ""
+
+  data.forEach(s => {
+    const div = document.createElement("div")
+    div.className = "item"
+
+    div.innerHTML = `
+      <p><b>${s.titulo}</b> (${s.tipo})</p>
+      <button onclick="eliminar('${s._id}')">🗑️ Eliminar</button>
+    `
+
+    cont.appendChild(div)
+  })
+}
+
+/* =========================
+   🗑️ ELIMINAR
+========================= */
+async function eliminar(id) {
+  if (!confirm("¿Eliminar contenido?")) return
+
+  const res = await fetch("http://localhost:3000/serie/" + id, {
+    method: "DELETE",
+    headers: {
+      "Authorization": "Bearer " + token
+    }
+  })
+
+  const data = await res.json()
+
+  alert(data.mensaje || "Eliminado")
+  cargarContenido()
+}
+
+/* =========================
+   🖼️ PREVIEW
+========================= */
+document.getElementById("portadaInput").addEventListener("change", (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+
+  const url = URL.createObjectURL(file)
+
+  document.getElementById("preview").innerHTML = `
+    <p>Vista previa:</p>
+    <img src="${url}">
+  `
+})
+
+/* =========================
+   📤 SUBIR
+========================= */
+document.getElementById("form").onsubmit = async (e) => {
+  e.preventDefault()
+
+  const btn = document.getElementById("btnSubir")
+  const status = document.getElementById("status")
+
+  const titulo = e.target.titulo.value.trim()
+  const tipo = e.target.tipo.value
+
+  if (!titulo || !tipo) {
+    alert("Completa los campos")
+    return
+  }
+
+  btn.disabled = true
+  status.innerText = "⏳ Subiendo..."
+
+  const formData = new FormData(e.target)
+
+  try {
+    const res = await fetch("http://localhost:3000/upload", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token
+      },
+      body: formData
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.mensaje || "Error")
+    }
+
+    status.innerText = "✅ Subido correctamente"
+    alert("Contenido subido 🔥")
+
+    e.target.reset()
+    document.getElementById("preview").innerHTML = ""
+
+    cargarContenido() // 🔥 refrescar lista
+
+  } catch (error) {
+    console.error(error)
+    status.innerText = "❌ " + error.message
+    alert(error.message)
+  }
+
+  btn.disabled = false
+}
+
+/* =========================
+   🚀 INIT
+========================= */
+cargarContenido()
+</script>
+
+</body>
+</html>
