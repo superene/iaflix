@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Netflix ULTRA PRO</title>
+<title>IAFLIX 🎬</title>
 
 <style>
 body {
@@ -75,14 +75,9 @@ video {
 
 <body>
 
-<!-- SIDEBAR -->
 <div class="sidebar">
 
-<input 
-type="text" 
-placeholder="🔍 Buscar..." 
-oninput="buscar(this.value)"
->
+<input type="text" placeholder="🔍 Buscar..." oninput="buscar(this.value)">
 
 <ul>
 <li onclick="inicio()">🏠 Inicio</li>
@@ -97,12 +92,10 @@ oninput="buscar(this.value)"
 
 </div>
 
-<!-- MAIN -->
 <div class="main">
 
 <h2 style="padding:10px;">👤 <span id="user"></span></h2>
 
-<!-- HERO -->
 <div id="hero" class="hero">
   <div class="hero-content">
     <h1 id="titulo"></h1>
@@ -113,15 +106,14 @@ oninput="buscar(this.value)"
   </div>
 </div>
 
-<!-- CONTENIDO -->
 <div id="lista"></div>
 
-<!-- VIDEO -->
 <video id="player" controls></video>
 
 </div>
 
 <script>
+const API = "https://iaflix.onrender.com"
 const token = localStorage.getItem("token")
 
 if(!token){
@@ -129,19 +121,22 @@ if(!token){
 }
 
 /* =========================
-   🎭 PERFIL ACTIVO
+   👤 PERFIL
 ========================= */
-fetch("http://localhost:3000/me",{
+fetch(API + "/me",{
   headers:{ Authorization:"Bearer "+token }
 })
 .then(r=>r.json())
 .then(user=>{
-  document.getElementById("user").innerText = user.username
+  if(!user) return
+
+  document.getElementById("user").innerText = user.username || ""
 
   if(!user.perfilActivo){
     window.location.href="perfiles.html"
   }
 })
+.catch(()=>console.log("Error /me"))
 
 let todas = []
 let actual = null
@@ -150,16 +145,20 @@ const player = document.getElementById("player")
 /* =========================
    📺 CARGAR CONTENIDO
 ========================= */
-fetch("http://localhost:3000/series")
+fetch(API + "/series")
 .then(r=>r.json())
 .then(data=>{
+  if(!Array.isArray(data)) return
+
   todas = data
   renderFilas(data)
+
   if(data.length) select(data[0])
 })
+.catch(()=>console.log("Error /series"))
 
 /* =========================
-   🎬 FILAS TIPO NETFLIX
+   🎬 FILAS
 ========================= */
 function renderFilas(data){
   const cont = document.getElementById("lista")
@@ -170,7 +169,7 @@ function renderFilas(data){
   categorias.forEach(tipo=>{
     const fila = data.filter(s=>s.tipo===tipo)
 
-    if(fila.length === 0) return
+    if(!fila.length) return
 
     const div = document.createElement("div")
 
@@ -201,7 +200,7 @@ function select(s){
 }
 
 /* =========================
-   ▶️ PLAY + PROGRESO
+   ▶️ PLAY
 ========================= */
 function play(){
   if(!actual) return
@@ -210,7 +209,7 @@ function play(){
   player.play()
 
   player.ontimeupdate = () => {
-    fetch("http://localhost:3000/historial/"+actual._id,{
+    fetch(API + "/historial/"+actual._id,{
       method:"POST",
       headers:{
         "Content-Type":"application/json",
@@ -224,7 +223,7 @@ function play(){
 }
 
 /* =========================
-   ▶️ AUTOPLAY SIGUIENTE
+   ▶️ AUTOPLAY
 ========================= */
 player.onended = () => {
   const index = todas.findIndex(s => s._id === actual._id)
@@ -241,7 +240,7 @@ player.onended = () => {
 function fav(){
   if(!actual) return
 
-  fetch("http://localhost:3000/favoritos/"+actual._id,{
+  fetch(API + "/favoritos/"+actual._id,{
     method:"POST",
     headers:{ Authorization:"Bearer "+token }
   })
@@ -281,7 +280,7 @@ function filtrar(tipo){
    ⭐ FAVORITOS
 ========================= */
 function verFavoritos(){
-  fetch("http://localhost:3000/favoritos",{
+  fetch(API + "/favoritos",{
     headers:{ Authorization:"Bearer "+token }
   })
   .then(r=>r.json())
@@ -292,7 +291,7 @@ function verFavoritos(){
    🕓 HISTORIAL
 ========================= */
 function verHistorial(){
-  fetch("http://localhost:3000/historial",{
+  fetch(API + "/historial",{
     headers:{ Authorization:"Bearer "+token }
   })
   .then(r=>r.json())
@@ -306,7 +305,7 @@ function verHistorial(){
    🧠 RECOMENDADOS
 ========================= */
 function verRecomendados(){
-  fetch("http://localhost:3000/recomendados",{
+  fetch(API + "/recomendados",{
     headers:{ Authorization:"Bearer "+token }
   })
   .then(r=>r.json())
