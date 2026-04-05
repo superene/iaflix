@@ -3,6 +3,7 @@ const cors = require("cors")
 const multer = require("multer")
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
+const path = require("path")
 
 const { CloudinaryStorage } = require("multer-storage-cloudinary")
 const cloudinary = require("cloudinary").v2
@@ -13,28 +14,30 @@ const Serie = require("./models/Serie")
 
 const app = express()
 
-/* =========================
-   🔧 MIDDLEWARE
-========================= */
 app.use(cors())
 app.use(express.json())
 
 /* =========================
-   🔐 SECRET
+   📂 SERVIR FRONTEND
+========================= */
+app.use(express.static(path.join(__dirname, "public")))
+
+/* =========================
+   🔑 SECRET
 ========================= */
 const SECRET = process.env.JWT_SECRET || "clave_secreta"
 
 /* =========================
-   ☁️ CLOUDINARY CONFIG
+   ☁️ CLOUDINARY
 ========================= */
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET
 })
 
 /* =========================
-   📦 MULTER CLOUDINARY
+   📦 MULTER CLOUD
 ========================= */
 const storage = new CloudinaryStorage({
   cloudinary,
@@ -47,10 +50,10 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage })
 
 /* =========================
-   🏠 RUTA RAÍZ (IMPORTANTE)
+   🏠 RUTA PRINCIPAL
 ========================= */
 app.get("/", (req, res) => {
-  res.send("🔥 IAFLIX API funcionando")
+  res.sendFile(path.join(__dirname, "public", "index.html"))
 })
 
 /* =========================
@@ -86,8 +89,7 @@ app.post("/register", async (req, res) => {
     await user.save()
     res.json({ mensaje: "Usuario creado" })
 
-  } catch (err) {
-    console.error(err)
+  } catch {
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -114,8 +116,7 @@ app.post("/login-user", async (req, res) => {
 
     res.json({ token })
 
-  } catch (err) {
-    console.error(err)
+  } catch {
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -139,39 +140,6 @@ function auth(req, res, next) {
 }
 
 /* =========================
-   👤 ME
-========================= */
-app.get("/me", auth, async (req, res) => {
-  try {
-    if (req.user.role === "admin") {
-      return res.json({ username: "admin", role: "admin" })
-    }
-
-    const user = await User.findById(req.user.id)
-
-    res.json({
-      username: user.username,
-      perfiles: user.perfiles,
-      perfilActivo: user.perfilActivo
-    })
-
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({})
-  }
-})
-
-/* =========================
-   👤 PERFIL
-========================= */
-app.post("/perfil", auth, async (req, res) => {
-  const user = await User.findById(req.user.id)
-  user.perfilActivo = req.body.nombre
-  await user.save()
-  res.json({ ok: true })
-})
-
-/* =========================
    📤 UPLOAD
 ========================= */
 app.post(
@@ -187,10 +155,6 @@ app.post(
         return res.status(403).json({ mensaje: "No autorizado" })
       }
 
-      if (!req.files || !req.files.video || !req.files.portada) {
-        return res.status(400).json({ mensaje: "Faltan archivos" })
-      }
-
       const serie = new Serie({
         titulo: req.body.titulo,
         descripcion: req.body.descripcion,
@@ -200,8 +164,7 @@ app.post(
       })
 
       await serie.save()
-
-      res.json({ mensaje: "Subido a Cloudinary ☁️" })
+      res.json({ mensaje: "Subido ☁️" })
 
     } catch (err) {
       console.error(err)
@@ -219,77 +182,8 @@ app.get("/series", async (req, res) => {
     res.json(data)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ mensaje: "Error obteniendo series" })
+    res.status(500).json({ error: "Error obteniendo series" })
   }
-})
-
-/* =========================
-   🗑️ DELETE
-========================= */
-app.delete("/serie/:id", auth, async (req, res) => {
-  try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ mensaje: "No autorizado" })
-    }
-
-    await Serie.findByIdAndDelete(req.params.id)
-    res.json({ mensaje: "Eliminado" })
-
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ mensaje: "Error eliminando" })
-  }
-})
-
-/* =========================
-   ⭐ FAVORITOS
-========================= */
-app.post("/favoritos/:id", auth, async (req, res) => {
-  const user = await User.findById(req.user.id)
-
-  const existe = user.favoritos.some(id => id.toString() === req.params.id)
-
-  if (existe) {
-    user.favoritos = user.favoritos.filter(id => id.toString() !== req.params.id)
-  } else {
-    user.favoritos.push(req.params.id)
-  }
-
-  await user.save()
-  res.json({ mensaje: "OK" })
-})
-
-app.get("/favoritos", auth, async (req, res) => {
-  const user = await User.findById(req.user.id).populate("favoritos")
-  res.json(user.favoritos)
-})
-
-/* =========================
-   🎬 HISTORIAL
-========================= */
-app.post("/historial/:id", auth, async (req, res) => {
-  const user = await User.findById(req.user.id)
-
-  user.historial = user.historial.filter(
-    h => h.serie.toString() !== req.params.id
-  )
-
-  user.historial.unshift({
-    serie: req.params.id,
-    tiempo: req.body.tiempo || 0
-  })
-
-  user.historial = user.historial.slice(0, 20)
-
-  await user.save()
-  res.json({})
-})
-
-app.get("/historial", auth, async (req, res) => {
-  const user = await User.findById(req.user.id)
-    .populate("historial.serie")
-
-  res.json(user.historial)
 })
 
 /* =========================
