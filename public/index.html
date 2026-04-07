@@ -115,43 +115,44 @@ video {
 <script>
 
 /* =========================
-   🌐 API DINÁMICA (FIX PRO)
+   🌐 API DINÁMICA
 ========================= */
 const API = window.location.origin
-
 const token = localStorage.getItem("token")
 
-if(!token){
-  location.href = "login-user.html"
+if (!token) {
+  location.href = "/login-user.html"
 }
 
 /* =========================
    👤 PERFIL
 ========================= */
-fetch(API + "/me",{
-  headers:{ Authorization:"Bearer "+token }
-})
-.then(r=>r.json())
-.then(user=>{
+async function checkPerfil() {
+  try {
+    const res = await fetch(API + "/me", {
+      headers: { Authorization: "Bearer " + token }
+    })
 
+    if (!res.ok) throw new Error()
 
-  // 🔥 SI NO TIENE PERFIL → REGRESA A PERFILES
-  if (!user.perfilActivo) {
-    window.location.href = "/perfiles.html"
-    return
+    const user = await res.json()
+
+    document.getElementById("user").innerText = user.username || ""
+
+    // 🔥 VALIDACIÓN REAL
+    if (!user.perfilActivo || user.perfilActivo === "") {
+      window.location.href = "/perfiles.html"
+      return
+    }
+
+  } catch (err) {
+    console.log("Error sesión")
+    localStorage.removeItem("token")
+    window.location.href = "/login-user.html"
   }
-  //if(!user) return
+}
 
-  document.getElementById("user").innerText = user.username || ""
-
-  if(!user.perfilActivo){
-    window.location.href="perfiles.html"
-  }
-})
-.catch(() => {
-  localStorage.removeItem("token")
-  location.href = "/login-user.html"
-})
+checkPerfil()
 
 let todas = []
 let actual = null
@@ -161,19 +162,16 @@ const player = document.getElementById("player")
    📺 CARGAR CONTENIDO
 ========================= */
 fetch(API + "/series")
-.then(r=>r.json())
-.then(data=>{
-  if(!Array.isArray(data)){
-    console.log("Error backend:", data)
-    return
-  }
+.then(r => r.json())
+.then(data => {
+  if (!Array.isArray(data)) return
 
   todas = data
   renderFilas(data)
 
-  if(data.length) select(data[0])
+  if (data.length) select(data[0])
 })
-.catch(()=>console.log("Error /series"))
+.catch(() => console.log("Error /series"))
 
 /* =========================
    🎬 FILAS
@@ -295,29 +293,13 @@ function filtrar(tipo){
 }
 
 /* =========================
-   ⭐ FAVORITOS
+   🚪 LOGOUT PRO
 ========================= */
-function verFavoritos(){
-  fetch(API + "/favoritos",{
-    headers:{ Authorization:"Bearer "+token }
-  })
-  .then(r=>r.json())
-  .then(renderFilas)
+function logout(){
+  localStorage.removeItem("token")
+  window.location.href = "/login-user.html"
 }
 
-/* =========================
-   🕓 HISTORIAL
-========================= */
-function verHistorial(){
-  fetch(API + "/historial",{
-    headers:{ Authorization:"Bearer "+token }
-  })
-  .then(r=>r.json())
-  .then(data=>{
-    const lista = data.map(h => h.serie)
-    renderFilas(lista)
-  })
-}
 
 </script>
 

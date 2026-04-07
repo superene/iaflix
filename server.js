@@ -152,7 +152,20 @@ app.post("/login-user", async (req, res) => {
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
+app.post("/perfil", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id)
 
+    user.perfilActivo = req.body.nombre
+
+    await user.save()
+
+    res.json({ ok: true })
+
+  } catch (err) {
+    res.status(500).json({ mensaje: "Error perfil" })
+  }
+})
 /* =========================
    👤 GET PERFIL /ME
 ========================= */
