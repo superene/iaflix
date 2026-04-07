@@ -68,7 +68,7 @@ function auth(req, res, next) {
 }
 
 /* =========================
-   🏠 RUTA PRINCIPAL
+   🏠 HOME
 ========================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"))
@@ -109,10 +109,10 @@ app.post("/register", async (req, res) => {
       favoritos: [],
       historial: [],
       perfiles: [
-        { nombre: "Principal", avatar: "👤" },
-        { nombre: "Niños", avatar: "🧸" }
+        { nombre: "Principal", avatar: "👤", tipo: "adulto" },
+        { nombre: "Niños", avatar: "🧸", tipo: "infantil" }
       ],
-      perfilActivo: null // 🔥 IMPORTANTE (para evitar bug de redirección)
+      perfilActivo: null
     })
 
     await user.save()
@@ -152,6 +152,41 @@ app.post("/login-user", async (req, res) => {
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
+
+/* =========================
+   👤 OBTENER USUARIO
+========================= */
+app.get("/me", auth, async (req, res) => {
+  try {
+
+    if (req.user.role === "admin") {
+      return res.json({
+        username: "admin",
+        perfiles: [{ nombre: "Admin", avatar: "👑", tipo: "adulto" }],
+        perfilActivo: "Admin"
+      })
+    }
+
+    const user = await User.findById(req.user.id)
+
+    if (!user) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" })
+    }
+
+    res.json({
+      username: user.username,
+      perfiles: user.perfiles,
+      perfilActivo: user.perfilActivo
+    })
+
+  } catch (err) {
+    res.status(500).json({ mensaje: "Error servidor" })
+  }
+})
+
+/* =========================
+   🎭 SELECCIONAR PERFIL
+========================= */
 app.post("/perfil", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
@@ -166,62 +201,32 @@ app.post("/perfil", auth, async (req, res) => {
     res.status(500).json({ mensaje: "Error perfil" })
   }
 })
+
 /* =========================
-   👤 GET PERFIL /ME
+   ➕ CREAR PERFIL
 ========================= */
-app.get("/me", auth, async (req, res) => {
+app.post("/crear-perfil", auth, async (req, res) => {
   try {
+    const { nombre, avatar, tipo } = req.body
 
-    // 👑 ADMIN
-    if (req.user.role === "admin") {
-      return res.json({
-        username: "admin",
-        role: "admin",
-        perfiles: [{ nombre: "Admin", avatar: "👑" }],
-        perfilActivo: "Admin"
-      })
-    }
-
-    // 👤 USER
     const user = await User.findById(req.user.id)
 
-    if (!user) {
-      return res.status(404).json({ mensaje: "Usuario no encontrado" })
+    if (user.perfiles.length >= 5) {
+      return res.status(400).json({ mensaje: "Máximo 5 perfiles" })
     }
 
-    res.json({
-      username: user.username,
-      perfiles: user.perfiles || [],
-      perfilActivo: user.perfilActivo || null
+    user.perfiles.push({
+      nombre,
+      avatar: avatar || "👤",
+      tipo: tipo || "adulto"
     })
 
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ mensaje: "Error servidor" })
-  }
-})
-
-/* =========================
-   👤 SELECCIONAR PERFIL
-========================= */
-app.post("/perfil", auth, async (req, res) => {
-  try {
-    const { nombre } = req.body
-
-    const user = await User.findById(req.user.id)
-
-    if (!user) {
-      return res.status(404).json({ mensaje: "Usuario no encontrado" })
-    }
-
-    user.perfilActivo = nombre
     await user.save()
 
-    res.json({ mensaje: "Perfil seleccionado" })
+    res.json({ ok: true })
 
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ mensaje: "Error servidor" })
+    res.status(500).json({ mensaje: "Error creando perfil" })
   }
 })
 
@@ -254,21 +259,34 @@ app.post(
       res.json({ mensaje: "Subido ☁️" })
 
     } catch (err) {
-      console.error(err)
       res.status(500).json({ mensaje: "Error upload" })
     }
   }
 )
 
 /* =========================
-   📺 SERIES
+   📺 SERIES (CON FILTRO INFANTIL 🔥)
 ========================= */
-app.get("/series", async (req, res) => {
+app.get("/series", auth, async (req, res) => {
   try {
-    const data = await Serie.find().sort({ createdAt: -1 })
+    const user = await User.findById(req.user.id)
+
+    let filtro = {}
+
+    const perfil = user.perfiles.find(
+      p => p.nombre === user.perfilActivo
+    )
+
+    // 👶 FILTRO INFANTIL
+    if (perfil && perfil.tipo === "infantil") {
+      filtro.tipo = { $in: ["anime", "musica"] }
+    }
+
+    const data = await Serie.find(filtro).sort({ createdAt: -1 })
+
     res.json(data)
+
   } catch (err) {
-    console.error(err)
     res.status(500).json({ error: "Error obteniendo series" })
   }
 })
