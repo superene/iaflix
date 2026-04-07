@@ -50,6 +50,24 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage })
 
 /* =========================
+   🔒 AUTH
+========================= */
+function auth(req, res, next) {
+  let token = req.headers["authorization"]
+
+  if (!token) return res.status(403).json({ mensaje: "Sin token" })
+
+  token = token.replace("Bearer ", "")
+
+  try {
+    req.user = jwt.verify(token, SECRET)
+    next()
+  } catch {
+    res.status(401).json({ mensaje: "Token inválido" })
+  }
+}
+
+/* =========================
    🏠 RUTA PRINCIPAL
 ========================= */
 app.get("/", (req, res) => {
@@ -72,10 +90,21 @@ app.post("/login", (req, res) => {
 ========================= */
 app.post("/register", async (req, res) => {
   try {
-    const hash = bcrypt.hashSync(req.body.password, 8)
+    const { username, password } = req.body
+
+    if (!username || !password) {
+      return res.status(400).json({ mensaje: "Datos incompletos" })
+    }
+
+    const existe = await User.findOne({ username: username.toLowerCase() })
+    if (existe) {
+      return res.status(400).json({ mensaje: "Usuario ya existe" })
+    }
+
+    const hash = bcrypt.hashSync(password, 8)
 
     const user = new User({
-      username: req.body.username.toLowerCase(),
+      username: username.toLowerCase(),
       password: hash,
       favoritos: [],
       historial: [],
@@ -83,13 +112,15 @@ app.post("/register", async (req, res) => {
         { nombre: "Principal", avatar: "👤" },
         { nombre: "Niños", avatar: "🧸" }
       ],
-      perfilActivo: "Principal"
+      perfilActivo: null // 🔥 IMPORTANTE (para evitar bug de redirección)
     })
 
     await user.save()
+
     res.json({ mensaje: "Usuario creado" })
 
-  } catch {
+  } catch (err) {
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -116,28 +147,70 @@ app.post("/login-user", async (req, res) => {
 
     res.json({ token })
 
-  } catch {
+  } catch (err) {
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
 
 /* =========================
-   🔒 AUTH
+   👤 GET PERFIL /ME
 ========================= */
-function auth(req, res, next) {
-  let token = req.headers["authorization"]
-
-  if (!token) return res.status(403).json({ mensaje: "Sin token" })
-
-  token = token.replace("Bearer ", "")
-
+app.get("/me", auth, async (req, res) => {
   try {
-    req.user = jwt.verify(token, SECRET)
-    next()
-  } catch {
-    res.status(401).json({ mensaje: "Token inválido" })
+
+    // 👑 ADMIN
+    if (req.user.role === "admin") {
+      return res.json({
+        username: "admin",
+        role: "admin",
+        perfiles: [{ nombre: "Admin", avatar: "👑" }],
+        perfilActivo: "Admin"
+      })
+    }
+
+    // 👤 USER
+    const user = await User.findById(req.user.id)
+
+    if (!user) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" })
+    }
+
+    res.json({
+      username: user.username,
+      perfiles: user.perfiles || [],
+      perfilActivo: user.perfilActivo || null
+    })
+
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ mensaje: "Error servidor" })
   }
-}
+})
+
+/* =========================
+   👤 SELECCIONAR PERFIL
+========================= */
+app.post("/perfil", auth, async (req, res) => {
+  try {
+    const { nombre } = req.body
+
+    const user = await User.findById(req.user.id)
+
+    if (!user) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" })
+    }
+
+    user.perfilActivo = nombre
+    await user.save()
+
+    res.json({ mensaje: "Perfil seleccionado" })
+
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ mensaje: "Error servidor" })
+  }
+})
 
 /* =========================
    📤 UPLOAD
@@ -164,6 +237,7 @@ app.post(
       })
 
       await serie.save()
+
       res.json({ mensaje: "Subido ☁️" })
 
     } catch (err) {

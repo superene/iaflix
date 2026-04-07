@@ -133,7 +133,14 @@ fetch(API + "/me",{
 })
 .then(r=>r.json())
 .then(user=>{
-  if(!user) return
+
+
+  // 🔥 SI NO TIENE PERFIL → REGRESA A PERFILES
+  if (!user.perfilActivo) {
+    window.location.href = "/perfiles.html"
+    return
+  }
+  //if(!user) return
 
   document.getElementById("user").innerText = user.username || ""
 
@@ -141,7 +148,10 @@ fetch(API + "/me",{
     window.location.href="perfiles.html"
   }
 })
-.catch(()=>console.log("Error /me"))
+.catch(() => {
+  localStorage.removeItem("token")
+  location.href = "/login-user.html"
+})
 
 let todas = []
 let actual = null
