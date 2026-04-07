@@ -14,7 +14,7 @@ if (!token) {
 /* =========================
    👤 USUARIO
 ========================= */
-fetch("http://localhost:3000/me", {
+fetch("https://iaflix.onrender.com/me", {
   headers: { Authorization: "Bearer " + token }
 })
 .then(res => res.json())
@@ -29,7 +29,7 @@ fetch("http://localhost:3000/me", {
 ========================= */
 async function cargarSeries() {
   try {
-    const res = await fetch("http://localhost:3000/series")
+    const res = await fetch("https://iaflix.onrender.com/series")
     const data = await res.json()
 
     todas = data
@@ -94,7 +94,7 @@ function reproducirHero() {
   player.play().catch(() => {})
 
   // 🎬 guardar historial
-  fetch("http://localhost:3000/historial/" + serieActual._id, {
+  fetch("https://iaflix.onrender.com/historial/" + serieActual._id, {
     method: "POST",
     headers: { Authorization: "Bearer " + token }
   })
@@ -106,7 +106,7 @@ function reproducirHero() {
 function toggleFavorito() {
   if (!serieActual) return
 
-  fetch("http://localhost:3000/favoritos/" + serieActual._id, {
+  fetch("https://iaflix.onrender.com/favoritos/" + serieActual._id, {
     method: "POST",
     headers: { Authorization: "Bearer " + token }
   })
@@ -152,7 +152,7 @@ function filtrar(tipo) {
    ⭐ VER FAVORITOS
 ========================= */
 function verFavoritos() {
-  fetch("http://localhost:3000/favoritos", {
+  fetch("https://iaflix.onrender.com/favoritos", {
     headers: { Authorization: "Bearer " + token }
   })
   .then(res => res.json())
@@ -163,7 +163,7 @@ function verFavoritos() {
    🕓 VER HISTORIAL
 ========================= */
 function verHistorial() {
-  fetch("http://localhost:3000/historial", {
+  fetch("https://iaflix.onrender.com/historial", {
     headers: { Authorization: "Bearer " + token }
   })
   .then(res => res.json())

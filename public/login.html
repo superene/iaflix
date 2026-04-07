@@ -71,7 +71,7 @@ button:hover {
   <form id="loginForm">
     <input type="text" id="username" placeholder="Usuario" required>
     <input type="password" id="password" placeholder="Contraseña" required>
-    <button>Entrar</button>
+    <button type="submit">Entrar</button>
   </form>
 
   <p class="error" id="error"></p>
@@ -79,10 +79,13 @@ button:hover {
 </div>
 
 <script>
+// 🔥 API dinámica
+const API = window.location.origin
+
 // limpiar token viejo
 localStorage.removeItem("token")
 
-document.getElementById("loginForm").onsubmit = async (e) => {
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault()
 
   const username = document.getElementById("username").value.trim()
@@ -94,13 +97,17 @@ document.getElementById("loginForm").onsubmit = async (e) => {
   error.innerText = ""
   success.innerText = ""
 
+  // validación
   if (!username || !password) {
     error.innerText = "Completa todos los campos"
     return
   }
 
   try {
-    const res = await fetch("http://localhost:3000/login", {
+
+    const API = window.location.origin
+   
+    const res = await fetch(API + "/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -108,7 +115,7 @@ document.getElementById("loginForm").onsubmit = async (e) => {
       body: JSON.stringify({ username, password })
     })
 
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
 
     if (res.ok) {
       localStorage.setItem("token", data.token)
@@ -116,7 +123,7 @@ document.getElementById("loginForm").onsubmit = async (e) => {
       success.innerText = "✅ Login correcto"
 
       setTimeout(() => {
-        window.location.href = "admin.html"
+        window.location.href = "/admin.html"
       }, 800)
 
     } else {
@@ -124,9 +131,9 @@ document.getElementById("loginForm").onsubmit = async (e) => {
     }
 
   } catch (err) {
-    error.innerText = "Error conectando con el servidor"
+    error.innerText = "❌ Error conectando con el servidor"
   }
-}
+})
 </script>
 
 </body>

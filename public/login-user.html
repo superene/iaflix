@@ -55,6 +55,17 @@ button:hover {
   color:red;
   margin-top:10px;
 }
+
+.link {
+  margin-top:15px;
+  display:block;
+  color:#aaa;
+  cursor:pointer;
+}
+
+.link:hover {
+  color:white;
+}
 </style>
 </head>
 
@@ -66,41 +77,64 @@ button:hover {
   <form id="form">
     <input type="text" id="username" placeholder="Usuario" required>
     <input type="password" id="password" placeholder="Contraseña" required>
-    <button>Entrar</button>
+    <button type="submit">Entrar</button>
   </form>
 
   <p class="error" id="error"></p>
+
+  <span class="link" onclick="irRegistro()">Crear cuenta</span>
 </div>
 
 <script>
-document.getElementById("form").onsubmit = async (e) => {
+// 🔥 API dinámica
+const API = window.location.origin
+
+function irRegistro(){
+  window.location.href = "/register.html"
+}
+
+// limpiar token viejo
+localStorage.removeItem("token")
+
+document.getElementById("form").addEventListener("submit", async (e) => {
   e.preventDefault()
 
   const username = document.getElementById("username").value.trim()
   const password = document.getElementById("password").value.trim()
 
-  try {
-    const res = await fetch("http://localhost:3000/login-user", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ username, password })
-    })
+  const error = document.getElementById("error")
+  error.innerText = ""
 
-    const data = await res.json()
+  if (!username || !password) {
+    error.innerText = "Completa todos los campos"
+    return
+  }
+
+  try {
+    const API = window.location.origin
+
+const res = await fetch(API + "/login-user", {
+  method: "POST",
+  headers: {"Content-Type":"application/json"},
+  body: JSON.stringify({ username, password })
+})
+
+    const data = await res.json().catch(() => ({}))
 
     if (res.ok && data.token) {
-      localStorage.setItem("token", data.token) // 🔥 CORRECTO
-      alert("Login correcto")
-      window.location.href = "index.html"
+      localStorage.setItem("token", data.token)
+
+      // 🚀 ir a perfiles
+      window.location.href = "/perfiles.html"
+
     } else {
-      alert("❌ Usuario o contraseña incorrectos")
+      error.innerText = data.mensaje || "❌ Usuario o contraseña incorrectos"
     }
 
-  } catch (error) {
-    console.error(error)
-    alert("Error de conexión")
+  } catch (err) {
+    error.innerText = "❌ Error conectando con el servidor"
   }
-}
+})
 </script>
 
 </body>

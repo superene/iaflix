@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
+<meta charset="UTF-8">
 <title>Perfiles</title>
 
 <style>
@@ -16,11 +17,13 @@ body {
   justify-content:center;
   gap:40px;
   margin-top:100px;
+  flex-wrap:wrap;
 }
 
 .perfil {
   cursor:pointer;
   font-size:20px;
+  transition:0.2s;
 }
 
 .perfil:hover {
@@ -36,39 +39,68 @@ body {
 <div id="perfiles" class="perfiles"></div>
 
 <script>
+// 🔥 API dinámica
+const API = window.location.origin
+
 const token = localStorage.getItem("token")
 
-fetch("http://localhost:3000/me",{
-  headers:{ Authorization:"Bearer "+token }
+// 🔒 Si no hay sesión → login
+if(!token){
+  window.location.href = "/login-user.html"
+}
+
+// 👤 Obtener perfiles
+fetch(API + "/me", {
+  headers:{ Authorization:"Bearer " + token }
 })
-.then(r=>r.json())
-.then(user=>{
+.then(r => r.json())
+.then(user => {
+
+  // ⚠️ Si falla sesión
+  if(!user || !user.perfiles){
+    window.location.href = "/login-user.html"
+    return
+  }
+
   const cont = document.getElementById("perfiles")
+  cont.innerHTML = ""
 
-  user.perfiles.forEach(p=>{
+  user.perfiles.forEach(p => {
+
     const div = document.createElement("div")
+    div.className = "perfil"
 
-    div.className="perfil"
     div.innerHTML = `
       <div style="font-size:60px">${p.avatar}</div>
       <p>${p.nombre}</p>
     `
 
-    div.onclick = async ()=>{
-      await fetch("http://localhost:3000/perfil",{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          Authorization:"Bearer "+token
-        },
-        body: JSON.stringify({ nombre:p.nombre })
-      })
+    div.onclick = async () => {
+      try {
+        await fetch(API + "/perfil", {
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json",
+            Authorization:"Bearer " + token
+          },
+          body: JSON.stringify({ nombre: p.nombre })
+        })
 
-      window.location.href="index.html"
+        // 🚀 Ir al inicio
+        window.location.href = "/"
+
+      } catch {
+        alert("Error al seleccionar perfil")
+      }
     }
 
     cont.appendChild(div)
   })
+
+})
+.catch(() => {
+  console.log("Error cargando perfiles")
+  window.location.href = "/login-user.html"
 })
 </script>
 

@@ -82,7 +82,7 @@ button:hover {
   <form id="form">
     <input type="text" id="username" placeholder="Usuario" required>
     <input type="password" id="password" placeholder="Contraseña (mín 4)" required>
-    <button>Registrarse</button>
+    <button type="submit">Registrarse</button>
   </form>
 
   <p class="error" id="error"></p>
@@ -92,11 +92,14 @@ button:hover {
 </div>
 
 <script>
+// 🔥 API dinámica (local o Render)
+const API = window.location.origin
+
 function irLogin(){
-  window.location.href = "login-user.html"
+  window.location.href = "/login-user.html"
 }
 
-document.getElementById("form").onsubmit = async (e) => {
+document.getElementById("form").addEventListener("submit", async (e) => {
   e.preventDefault()
 
   const username = document.getElementById("username").value.trim()
@@ -108,7 +111,7 @@ document.getElementById("form").onsubmit = async (e) => {
   error.innerText = ""
   success.innerText = ""
 
-  // validaciones
+  // ✅ Validaciones
   if (!username || !password) {
     error.innerText = "Completa todos los campos"
     return
@@ -120,19 +123,22 @@ document.getElementById("form").onsubmit = async (e) => {
   }
 
   try {
-    const res = await fetch("http://localhost:3000/register", {
+
+    const API = window.location.origin
+
+    const res = await fetch(API + "/register", {
       method: "POST",
-      headers: {"Content-Type":"application/json"},
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password })
     })
 
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
 
     if (res.ok) {
       success.innerText = "✅ Cuenta creada correctamente"
 
       setTimeout(() => {
-        window.location.href = "login-user.html"
+        window.location.href = "/login-user.html"
       }, 1000)
 
     } else {
@@ -140,9 +146,9 @@ document.getElementById("form").onsubmit = async (e) => {
     }
 
   } catch (err) {
-    error.innerText = "Error conectando con el servidor"
+    error.innerText = "❌ No se pudo conectar con el servidor"
   }
-}
+})
 </script>
 
 </body>

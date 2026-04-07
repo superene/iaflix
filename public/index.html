@@ -85,7 +85,6 @@ video {
 <li onclick="filtrar('pelicula')">🎥 Películas</li>
 <li onclick="filtrar('musica')">🎵 Música</li>
 <li onclick="filtrar('anime')">🧩 Anime</li>
-<li onclick="verRecomendados()">🧠 Recomendados</li>
 <li onclick="verFavoritos()">⭐ Favoritos</li>
 <li onclick="verHistorial()">🕓 Historial</li>
 </ul>
@@ -113,11 +112,16 @@ video {
 </div>
 
 <script>
-const API = "https://iaflix.onrender.com"
+
+/* =========================
+   🌐 API DINÁMICA (FIX PRO)
+========================= */
+const API = window.location.origin
+
 const token = localStorage.getItem("token")
 
 if(!token){
-  location.href="login-user.html"
+  location.href = "login-user.html"
 }
 
 /* =========================
@@ -148,7 +152,10 @@ const player = document.getElementById("player")
 fetch(API + "/series")
 .then(r=>r.json())
 .then(data=>{
-  if(!Array.isArray(data)) return
+  if(!Array.isArray(data)){
+    console.log("Error backend:", data)
+    return
+  }
 
   todas = data
   renderFilas(data)
@@ -301,16 +308,6 @@ function verHistorial(){
   })
 }
 
-/* =========================
-   🧠 RECOMENDADOS
-========================= */
-function verRecomendados(){
-  fetch(API + "/recomendados",{
-    headers:{ Authorization:"Bearer "+token }
-  })
-  .then(r=>r.json())
-  .then(renderFilas)
-}
 </script>
 
 </body>
