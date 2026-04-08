@@ -28,8 +28,12 @@ app.use(express.static(path.join(__dirname, "public")))
 const SECRET = process.env.JWT_SECRET || "clave_secreta"
 
 /* =========================
-   ☁️ CLOUDINARY
+   ☁️ CLOUDINARY (FIX IMPORTANTE)
 ========================= */
+if (!process.env.CLOUD_NAME) {
+  console.log("⚠️ Cloudinary no configurado (esto causa error 500 en upload)")
+}
+
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
   api_key: process.env.CLOUD_API_KEY,
@@ -37,14 +41,14 @@ cloudinary.config({
 })
 
 /* =========================
-   📦 MULTER CLOUD
+   📦 MULTER CLOUD (CON DEBUG)
 ========================= */
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
+  params: async (req, file) => ({
     folder: "iaflix",
     resource_type: "auto"
-  }
+  })
 })
 
 const upload = multer({ storage })
@@ -120,7 +124,7 @@ app.post("/register", async (req, res) => {
     res.json({ mensaje: "Usuario creado" })
 
   } catch (err) {
-    console.error(err)
+    console.error("REGISTER ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -148,7 +152,7 @@ app.post("/login-user", async (req, res) => {
     res.json({ token })
 
   } catch (err) {
-    console.error(err)
+    console.error("LOGIN USER ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -161,6 +165,7 @@ app.get("/me", auth, async (req, res) => {
     if (req.user.role === "admin") {
       return res.json({
         username: "admin",
+        role: "admin",
         perfiles: [{ nombre: "Admin", avatar: "👑", tipo: "adulto" }],
         perfilActivo: "Admin"
       })
@@ -174,12 +179,13 @@ app.get("/me", auth, async (req, res) => {
 
     res.json({
       username: user.username,
+      role: "user",
       perfiles: user.perfiles || [],
       perfilActivo: user.perfilActivo || null
     })
 
   } catch (err) {
-    console.error(err)
+    console.error("ME ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -197,10 +203,6 @@ app.post("/perfil", auth, async (req, res) => {
 
     const user = await User.findById(req.user.id)
 
-    if (!user) {
-      return res.status(404).json({ mensaje: "Usuario no encontrado" })
-    }
-
     const existe = user.perfiles.find(p => p.nombre === nombre)
 
     if (!existe) {
@@ -213,7 +215,7 @@ app.post("/perfil", auth, async (req, res) => {
     res.json({ ok: true })
 
   } catch (err) {
-    console.error(err)
+    console.error("PERFIL ERROR:", err)
     res.status(500).json({ mensaje: "Error perfil" })
   }
 })
@@ -246,6 +248,7 @@ app.post("/crear-perfil", auth, async (req, res) => {
     res.json({ ok: true })
 
   } catch (err) {
+    console.error("CREAR PERFIL ERROR:", err)
     res.status(500).json({ mensaje: "Error creando perfil" })
   }
 })
@@ -259,21 +262,18 @@ app.delete("/serie/:id", auth, async (req, res) => {
       return res.status(403).json({ mensaje: "No autorizado" })
     }
 
-    if (!req.params.id) {
-      return res.status(400).json({ mensaje: "ID requerido" })
-    }
-
     await Serie.findByIdAndDelete(req.params.id)
 
     res.json({ mensaje: "Eliminado" })
 
   } catch (err) {
+    console.error("DELETE ERROR:", err)
     res.status(500).json({ mensaje: "Error eliminando" })
   }
 })
 
 /* =========================
-   📺 SERIES (SMART 🔥)
+   📺 SERIES (SMART)
 ========================= */
 app.get("/series", async (req, res) => {
   try {
@@ -296,21 +296,20 @@ app.get("/series", async (req, res) => {
           }
         }
 
-      } catch {
-        // token inválido → ignora
-      }
+      } catch {}
     }
 
     const data = await Serie.find(filtro).sort({ createdAt: -1 })
     res.json(data)
 
   } catch (err) {
+    console.error("SERIES ERROR:", err)
     res.status(500).json({ error: "Error obteniendo series" })
   }
 })
 
 /* =========================
-   📤 UPLOAD
+   📤 UPLOAD (FIX 500 REAL)
 ========================= */
 app.post(
   "/upload",
@@ -325,7 +324,7 @@ app.post(
         return res.status(403).json({ mensaje: "No autorizado" })
       }
 
-      if (!req.files?.portada || !req.files?.video) {
+      if (!req.files || !req.files.portada || !req.files.video) {
         return res.status(400).json({ mensaje: "Faltan archivos" })
       }
 
@@ -339,9 +338,10 @@ app.post(
 
       await serie.save()
 
-      res.json({ mensaje: "Subido ☁️" })
+      res.json({ mensaje: "Subido correctamente 🚀" })
 
     } catch (err) {
+      console.error("UPLOAD ERROR:", err)
       res.status(500).json({ mensaje: "Error upload" })
     }
   }
