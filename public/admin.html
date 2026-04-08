@@ -52,6 +52,8 @@ button:disabled { background:gray; }
 
 <h1>🎬 Panel Admin PRO</h1>
 
+<button onclick="logout()">🚪 Cerrar sesión</button>
+
 <h2>📂 Contenido</h2>
 <div id="listaAdmin"></div>
 
@@ -85,43 +87,46 @@ const API = location.hostname.includes("localhost")
   ? "http://localhost:3000"
   : "https://iaflix.onrender.com"
 
-const token = localStorage.getItem("token")
-
 /* =========================
-   🔐 VALIDAR ADMIN
+   🔐 VALIDAR ADMIN (FIX REAL)
 ========================= */
-async function validarAdmin() {
+function validarAdmin() {
+  const token = localStorage.getItem("token")
+
   if (!token) {
     alert("Debes iniciar sesión")
-    return location.href = "/login.html"
+    location.href = "/login.html"
+    return null
   }
 
   try {
-    const res = await fetch(API + "/me", {
-      headers: { Authorization: "Bearer " + token }
-    })
+    const payload = JSON.parse(atob(token.split(".")[1]))
 
-    const user = await res.json()
-
-    if (user.role !== "admin") {
+    if (payload.role !== "admin") {
       alert("No eres admin")
-      location.href = "/index.html"
+      localStorage.removeItem("token")
+      location.href = "/login.html"
+      return null
     }
 
-  } catch {
+    return token
+
+  } catch (err) {
+    console.log("Token inválido")
     localStorage.removeItem("token")
     location.href = "/login.html"
+    return null
   }
 }
+
+const token = validarAdmin()
 
 /* =========================
    📺 CARGAR CONTENIDO
 ========================= */
 async function cargarContenido() {
   try {
-    const res = await fetch(API + "/series", {
-      headers: { Authorization: "Bearer " + token }
-    })
+    const res = await fetch(API + "/series")
 
     const text = await res.text()
 
@@ -150,7 +155,7 @@ async function cargarContenido() {
       cont.appendChild(div)
     })
 
-  } catch (err) {
+  } catch {
     console.log("Error cargando contenido")
   }
 }
@@ -159,7 +164,7 @@ async function cargarContenido() {
    🗑️ ELIMINAR
 ========================= */
 async function eliminar(id) {
-  if (!confirm("¿Eliminar?")) return
+  if (!confirm("¿Eliminar contenido?")) return
 
   try {
     const res = await fetch(API + "/serie/" + id, {
@@ -244,10 +249,19 @@ document.getElementById("form").onsubmit = async (e) => {
 }
 
 /* =========================
+   🚪 LOGOUT
+========================= */
+function logout() {
+  localStorage.removeItem("token")
+  location.href = "/login.html"
+}
+
+/* =========================
    🚀 INIT
 ========================= */
-validarAdmin()
-cargarContenido()
+if (token) {
+  cargarContenido()
+}
 </script>
 
 </body>
