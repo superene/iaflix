@@ -12,13 +12,7 @@ body {
   text-align:center;
 }
 
-h1 {
-  margin-top:30px;
-}
-
-form {
-  margin-top:30px;
-}
+h1 { margin-top:30px; }
 
 input, textarea, select {
   display:block;
@@ -40,18 +34,11 @@ button {
   font-weight:bold;
 }
 
-button:disabled {
-  background:gray;
-}
+button:disabled { background:gray; }
 
 #preview img {
   max-width:150px;
   border-radius:5px;
-}
-
-.status {
-  margin-top:15px;
-  font-weight:bold;
 }
 
 .item {
@@ -63,58 +50,88 @@ button:disabled {
 
 <body>
 
-<h1>🎬 Panel Admin</h1>
+<h1>🎬 Panel Admin PRO</h1>
 
-<h2>📂 Contenido subido</h2>
+<h2>📂 Contenido</h2>
 <div id="listaAdmin"></div>
 
 <form id="form">
-
 <input type="text" name="titulo" placeholder="Título" required>
-
 <textarea name="descripcion" placeholder="Descripción"></textarea>
 
 <select name="tipo" required>
-  <option value="">Selecciona tipo</option>
+  <option value="">Tipo</option>
   <option value="serie">Serie</option>
   <option value="pelicula">Película</option>
   <option value="musica">Música</option>
   <option value="anime">Anime</option>
 </select>
 
-<label>Portada:</label>
+<label>Portada</label>
 <input type="file" id="portadaInput" name="portada" accept="image/*" required>
 
 <div id="preview"></div>
 
-<label>Video:</label>
+<label>Video</label>
 <input type="file" name="video" accept="video/*" required>
 
-<button id="btnSubir" type="submit">Subir contenido</button>
+<button id="btnSubir">Subir</button>
 
-<div class="status" id="status"></div>
-
+<p id="status"></p>
 </form>
 
 <script>
-const API = window.location.origin
+const API = location.hostname.includes("localhost")
+  ? "http://localhost:3000"
+  : "https://iaflix.onrender.com"
+
 const token = localStorage.getItem("token")
 
 /* =========================
-   🔐 VALIDAR LOGIN
+   🔐 VALIDAR ADMIN
 ========================= */
-if (!token) {
-  alert("Debes iniciar sesión como admin")
-  window.location.href = "login.html"
+async function validarAdmin() {
+  if (!token) {
+    alert("Debes iniciar sesión")
+    return location.href = "/login.html"
+  }
+
+  try {
+    const res = await fetch(API + "/me", {
+      headers: { Authorization: "Bearer " + token }
+    })
+
+    const user = await res.json()
+
+    if (user.role !== "admin") {
+      alert("No eres admin")
+      location.href = "/index.html"
+    }
+
+  } catch {
+    localStorage.removeItem("token")
+    location.href = "/login.html"
+  }
 }
 
 /* =========================
-   📺 LISTAR CONTENIDO
+   📺 CARGAR CONTENIDO
 ========================= */
 async function cargarContenido() {
   try {
-    const res = await fetch(API + "/series")
-    const data = await res.json()
+    const res = await fetch(API + "/series", {
+      headers: { Authorization: "Bearer " + token }
+    })
+
+    const text = await res.text()
+
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      console.error("Respuesta no JSON:", text)
+      return
+    }
 
     const cont = document.getElementById("listaAdmin")
     cont.innerHTML = ""
@@ -142,17 +159,15 @@ async function cargarContenido() {
    🗑️ ELIMINAR
 ========================= */
 async function eliminar(id) {
-  if (!confirm("¿Eliminar contenido?")) return
+  if (!confirm("¿Eliminar?")) return
 
   try {
     const res = await fetch(API + "/serie/" + id, {
       method: "DELETE",
-      headers: {
-        "Authorization": "Bearer " + token
-      }
+      headers: { Authorization: "Bearer " + token }
     })
 
-    const data = await res.json()
+    const data = await res.json().catch(()=>({}))
 
     alert(data.mensaje || "Eliminado")
     cargarContenido()
@@ -165,14 +180,13 @@ async function eliminar(id) {
 /* =========================
    🖼️ PREVIEW
 ========================= */
-document.getElementById("portadaInput").addEventListener("change", (e) => {
+document.getElementById("portadaInput").addEventListener("change", e => {
   const file = e.target.files[0]
   if (!file) return
 
   const url = URL.createObjectURL(file)
 
   document.getElementById("preview").innerHTML = `
-    <p>Vista previa:</p>
     <img src="${url}">
   `
 })
@@ -187,7 +201,7 @@ document.getElementById("form").onsubmit = async (e) => {
   const status = document.getElementById("status")
 
   btn.disabled = true
-  status.innerText = "⏳ Subiendo..."
+  status.innerText = "Subiendo..."
 
   const formData = new FormData(e.target)
 
@@ -195,16 +209,24 @@ document.getElementById("form").onsubmit = async (e) => {
     const res = await fetch(API + "/upload", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer " + token
+        Authorization: "Bearer " + token
       },
       body: formData
     })
 
-    const data = await res.json()
+    const text = await res.text()
+
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      console.error("Respuesta inválida:", text)
+      throw new Error()
+    }
 
     if (!res.ok) throw new Error(data.mensaje)
 
-    status.innerText = "✅ Subido correctamente"
+    status.innerText = "✅ Subido"
     alert("Contenido subido 🔥")
 
     e.target.reset()
@@ -212,8 +234,8 @@ document.getElementById("form").onsubmit = async (e) => {
 
     cargarContenido()
 
-  } catch (error) {
-    console.error(error)
+  } catch (err) {
+    console.error(err)
     status.innerText = "❌ Error"
     alert("Error subiendo")
   }
@@ -224,6 +246,7 @@ document.getElementById("form").onsubmit = async (e) => {
 /* =========================
    🚀 INIT
 ========================= */
+validarAdmin()
 cargarContenido()
 </script>
 

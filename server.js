@@ -185,7 +185,7 @@ app.get("/me", auth, async (req, res) => {
 })
 
 /* =========================
-   🎭 SELECCIONAR PERFIL (FIX PRO)
+   🎭 SELECCIONAR PERFIL
 ========================= */
 app.post("/perfil", auth, async (req, res) => {
   try {
@@ -225,6 +225,10 @@ app.post("/crear-perfil", auth, async (req, res) => {
   try {
     const { nombre, avatar, tipo } = req.body
 
+    if (!nombre) {
+      return res.status(400).json({ mensaje: "Nombre requerido" })
+    }
+
     const user = await User.findById(req.user.id)
 
     if (user.perfiles.length >= 5) {
@@ -247,24 +251,57 @@ app.post("/crear-perfil", auth, async (req, res) => {
 })
 
 /* =========================
-   📺 SERIES (CON TOKEN 🔥)
+   🗑️ ELIMINAR SERIE
 ========================= */
-app.get("/series", auth, async (req, res) => {
+app.delete("/serie/:id", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id)
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ mensaje: "No autorizado" })
+    }
 
+    if (!req.params.id) {
+      return res.status(400).json({ mensaje: "ID requerido" })
+    }
+
+    await Serie.findByIdAndDelete(req.params.id)
+
+    res.json({ mensaje: "Eliminado" })
+
+  } catch (err) {
+    res.status(500).json({ mensaje: "Error eliminando" })
+  }
+})
+
+/* =========================
+   📺 SERIES (SMART 🔥)
+========================= */
+app.get("/series", async (req, res) => {
+  try {
     let filtro = {}
 
-    const perfil = user.perfiles.find(
-      p => p.nombre === user.perfilActivo
-    )
+    if (req.headers.authorization) {
+      try {
+        const token = req.headers.authorization.replace("Bearer ", "")
+        const decoded = jwt.verify(token, SECRET)
 
-    if (perfil && perfil.tipo === "infantil") {
-      filtro.tipo = { $in: ["anime", "musica"] }
+        if (decoded.role === "user") {
+          const user = await User.findById(decoded.id)
+
+          const perfil = user?.perfiles.find(
+            p => p.nombre === user.perfilActivo
+          )
+
+          if (perfil && perfil.tipo === "infantil") {
+            filtro.tipo = { $in: ["anime", "musica"] }
+          }
+        }
+
+      } catch {
+        // token inválido → ignora
+      }
     }
 
     const data = await Serie.find(filtro).sort({ createdAt: -1 })
-
     res.json(data)
 
   } catch (err) {
@@ -286,6 +323,10 @@ app.post(
     try {
       if (req.user.role !== "admin") {
         return res.status(403).json({ mensaje: "No autorizado" })
+      }
+
+      if (!req.files?.portada || !req.files?.video) {
+        return res.status(400).json({ mensaje: "Faltan archivos" })
       }
 
       const serie = new Serie({
