@@ -88,6 +88,7 @@ video {
 <li onclick="filtrar('anime')">🧩 Anime</li>
 <li onclick="verFavoritos()">⭐ Favoritos</li>
 <li onclick="verHistorial()">🕓 Historial</li>
+<li onclick="logout()">🚪 Cerrar sesión</li>
 </ul>
 
 </div>
@@ -120,7 +121,8 @@ video {
 const API = window.location.origin
 const token = localStorage.getItem("token")
 
-if (!token) {
+if (!token || token === "null" || token === "undefined") {
+  localStorage.removeItem("token")
   location.href = "/login-user.html"
 }
 
@@ -139,39 +141,58 @@ async function checkPerfil() {
 
     document.getElementById("user").innerText = user.username || ""
 
-    // 🔥 VALIDACIÓN REAL
     if (!user.perfilActivo || user.perfilActivo === "") {
       window.location.href = "/perfiles.html"
-      return
+      return false
     }
+
+    return true
 
   } catch (err) {
     console.log("Error sesión")
     localStorage.removeItem("token")
     window.location.href = "/login-user.html"
+    return false
   }
 }
 
-checkPerfil()
-
+/* =========================
+   🚀 INIT APP
+========================= */
 let todas = []
 let actual = null
 const player = document.getElementById("player")
 
-/* =========================
-   📺 CARGAR CONTENIDO
-========================= */
-fetch(API + "/series")
-.then(r => r.json())
-.then(data => {
-  if (!Array.isArray(data)) return
+async function init() {
 
-  todas = data
-  renderFilas(data)
+  const ok = await checkPerfil()
+  if (!ok) return
 
-  if (data.length) select(data[0])
-})
-.catch(() => console.log("Error /series"))
+  try {
+    const res = await fetch(API + "/series", {
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    })
+
+    const data = await res.json()
+
+    if (!Array.isArray(data)) {
+      console.log("Error backend:", data)
+      return
+    }
+
+    todas = data
+    renderFilas(data)
+
+    if (data.length) select(data[0])
+
+  } catch (err) {
+    console.log("Error /series")
+  }
+}
+
+init()
 
 /* =========================
    🎬 FILAS
@@ -293,13 +314,37 @@ function filtrar(tipo){
 }
 
 /* =========================
-   🚪 LOGOUT PRO
+   ⭐ FAVORITOS
+========================= */
+function verFavoritos(){
+  fetch(API + "/favoritos",{
+    headers:{ Authorization:"Bearer "+token }
+  })
+  .then(r=>r.json())
+  .then(renderFilas)
+}
+
+/* =========================
+   🕓 HISTORIAL
+========================= */
+function verHistorial(){
+  fetch(API + "/historial",{
+    headers:{ Authorization:"Bearer "+token }
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    const lista = data.map(h => h.serie)
+    renderFilas(lista)
+  })
+}
+
+/* =========================
+   🚪 LOGOUT
 ========================= */
 function logout(){
   localStorage.removeItem("token")
   window.location.href = "/login-user.html"
 }
-
 
 </script>
 

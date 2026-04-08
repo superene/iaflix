@@ -63,7 +63,7 @@ function auth(req, res, next) {
     req.user = jwt.verify(token, SECRET)
     next()
   } catch {
-    res.status(401).json({ mensaje: "Token inválido" })
+    return res.status(401).json({ mensaje: "Token inválido" })
   }
 }
 
@@ -154,11 +154,10 @@ app.post("/login-user", async (req, res) => {
 })
 
 /* =========================
-   👤 OBTENER USUARIO
+   👤 /ME
 ========================= */
 app.get("/me", auth, async (req, res) => {
   try {
-
     if (req.user.role === "admin") {
       return res.json({
         username: "admin",
@@ -175,29 +174,46 @@ app.get("/me", auth, async (req, res) => {
 
     res.json({
       username: user.username,
-      perfiles: user.perfiles,
-      perfilActivo: user.perfilActivo
+      perfiles: user.perfiles || [],
+      perfilActivo: user.perfilActivo || null
     })
 
   } catch (err) {
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
 
 /* =========================
-   🎭 SELECCIONAR PERFIL
+   🎭 SELECCIONAR PERFIL (FIX PRO)
 ========================= */
 app.post("/perfil", auth, async (req, res) => {
   try {
+    const { nombre } = req.body
+
+    if (!nombre) {
+      return res.status(400).json({ mensaje: "Nombre requerido" })
+    }
+
     const user = await User.findById(req.user.id)
 
-    user.perfilActivo = req.body.nombre
+    if (!user) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" })
+    }
 
+    const existe = user.perfiles.find(p => p.nombre === nombre)
+
+    if (!existe) {
+      return res.status(400).json({ mensaje: "Perfil inválido" })
+    }
+
+    user.perfilActivo = nombre
     await user.save()
 
     res.json({ ok: true })
 
   } catch (err) {
+    console.error(err)
     res.status(500).json({ mensaje: "Error perfil" })
   }
 })
@@ -227,6 +243,32 @@ app.post("/crear-perfil", auth, async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ mensaje: "Error creando perfil" })
+  }
+})
+
+/* =========================
+   📺 SERIES (CON TOKEN 🔥)
+========================= */
+app.get("/series", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id)
+
+    let filtro = {}
+
+    const perfil = user.perfiles.find(
+      p => p.nombre === user.perfilActivo
+    )
+
+    if (perfil && perfil.tipo === "infantil") {
+      filtro.tipo = { $in: ["anime", "musica"] }
+    }
+
+    const data = await Serie.find(filtro).sort({ createdAt: -1 })
+
+    res.json(data)
+
+  } catch (err) {
+    res.status(500).json({ error: "Error obteniendo series" })
   }
 })
 
@@ -263,33 +305,6 @@ app.post(
     }
   }
 )
-
-/* =========================
-   📺 SERIES (CON FILTRO INFANTIL 🔥)
-========================= */
-app.get("/series", auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id)
-
-    let filtro = {}
-
-    const perfil = user.perfiles.find(
-      p => p.nombre === user.perfilActivo
-    )
-
-    // 👶 FILTRO INFANTIL
-    if (perfil && perfil.tipo === "infantil") {
-      filtro.tipo = { $in: ["anime", "musica"] }
-    }
-
-    const data = await Serie.find(filtro).sort({ createdAt: -1 })
-
-    res.json(data)
-
-  } catch (err) {
-    res.status(500).json({ error: "Error obteniendo series" })
-  }
-})
 
 /* =========================
    🚀 SERVER

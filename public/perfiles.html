@@ -1,16 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Perfiles</title>
+
+<style>
+body {
+  background:#111;
+  color:white;
+  text-align:center;
+  font-family:Arial;
+}
+
+h1 {
+  margin-top:50px;
+}
+
+/* CONTENEDOR */
+.perfiles {
+  display:flex;
+  justify-content:center;
+  gap:40px;
+  margin-top:80px;
+  flex-wrap:wrap;
+}
+
+/* PERFIL */
+.perfil {
+  cursor:pointer;
+  transition:0.3s;
+}
+
+.perfil:hover {
+  transform:scale(1.1);
+}
+
+.avatar {
+  width:100px;
+  height:100px;
+  border-radius:50%;
+  background:#222;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:40px;
+  margin:auto;
+}
+
+.nombre {
+  margin-top:10px;
+  font-size:18px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>¿Quién está viendo?</h1>
+
+<div id="perfiles" class="perfiles"></div>
+
 <script>
+
+/* =========================
+   🌐 API DINÁMICA PRO
+========================= */
 const API = location.hostname.includes("localhost")
   ? "http://localhost:3000"
   : "https://iaflix.onrender.com"
 
 const token = localStorage.getItem("token")
 
-// 🔒 Protección total
-if (!token) {
+/* =========================
+   🔒 PROTECCIÓN
+========================= */
+if (!token || token === "null" || token === "undefined") {
+  localStorage.removeItem("token")
   window.location.href = "/login-user.html"
 }
 
-// 🔥 Cargar usuario
+/* =========================
+   👤 CARGAR PERFILES
+========================= */
 async function cargarPerfiles() {
   try {
     const res = await fetch(API + "/me", {
@@ -21,7 +92,6 @@ async function cargarPerfiles() {
 
     const user = await res.json()
 
-    // 🔥 Validación PRO
     if (!user || !Array.isArray(user.perfiles)) {
       throw new Error("Datos corruptos")
     }
@@ -30,16 +100,18 @@ async function cargarPerfiles() {
     cont.innerHTML = ""
 
     user.perfiles.forEach(p => {
+
       const div = document.createElement("div")
       div.className = "perfil"
 
       div.innerHTML = `
-        <div style="font-size:60px">${p.avatar}</div>
-        <p>${p.nombre}</p>
+        <div class="avatar">${p.avatar || "👤"}</div>
+        <div class="nombre">${p.nombre}</div>
       `
 
       div.onclick = async () => {
         try {
+
           const res = await fetch(API + "/perfil", {
             method: "POST",
             headers: {
@@ -51,11 +123,11 @@ async function cargarPerfiles() {
 
           if (!res.ok) throw new Error()
 
-          // 🚀 ENTRA AL HOME
+          // 🚀 REDIRECCIÓN LIMPIA
           window.location.href = "/index.html"
 
         } catch {
-          alert("Error al seleccionar perfil")
+          alert("❌ Error al seleccionar perfil")
         }
       }
 
@@ -65,12 +137,17 @@ async function cargarPerfiles() {
   } catch (err) {
     console.log("ERROR:", err.message)
 
-    // 🧹 Limpieza total
     localStorage.removeItem("token")
-
     window.location.href = "/login-user.html"
   }
 }
 
+/* =========================
+   🚀 INIT
+========================= */
 cargarPerfiles()
+
 </script>
+
+</body>
+</html>
