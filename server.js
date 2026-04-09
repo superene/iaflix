@@ -121,14 +121,21 @@ app.delete("/serie/:id", auth, async (req, res) => {
 /* =========================
    📤 UPLOAD (FIX REAL)
 ========================= */
-app.post(
-  "/upload",
-  auth,
+app.post("/upload", auth, (req, res) => {
+
   upload.fields([
     { name: "video", maxCount: 1 },
     { name: "portada", maxCount: 1 }
-  ]),
-  async (req, res) => {
+  ])(req, res, async (err) => {
+
+    if (err) {
+      console.error("💥 MULTER ERROR:", err)
+      return res.status(500).json({
+        mensaje: "Error subiendo archivos",
+        error: err.message
+      })
+    }
+
     try {
       console.log("BODY:", req.body)
       console.log("FILES:", req.files)
@@ -137,10 +144,10 @@ app.post(
         return res.status(403).json({ mensaje: "No autorizado" })
       }
 
-      if (!req.files || !req.files.video || !req.files.portada) {
+      if (!req.files?.video || !req.files?.portada) {
         return res.status(400).json({
-          mensaje: "Archivos faltantes",
-          debug: req.files
+          mensaje: "Faltan archivos",
+          files: req.files
         })
       }
 
@@ -158,26 +165,19 @@ app.post(
       await serie.save()
 
       res.json({
-        mensaje: "Subido correctamente",
+        mensaje: "Subido correctamente 🚀",
         video: videoUrl
       })
 
-    } catch (err) {
-      console.error("💥 ERROR UPLOAD:", err)
+    } catch (error) {
+      console.error("💥 ERROR INTERNO:", error)
 
       res.status(500).json({
-        mensaje: "Error upload",
-        error: err.message
+        mensaje: "Error interno",
+        error: error.message
       })
     }
-  }
-)
 
-/* =========================
-   🚀 SERVER
-========================= */
-const PORT = process.env.PORT || 3000
+  })
 
-app.listen(PORT, () => {
-  console.log("🔥 servidor corriendo en puerto " + PORT)
 })
