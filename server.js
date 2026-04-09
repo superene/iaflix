@@ -14,6 +14,9 @@ const Serie = require("./models/Serie")
 
 const app = express()
 
+/* =========================
+   ⚙️ CONFIG
+========================= */
 app.use(cors())
 app.use(express.json())
 app.use(express.static(path.join(__dirname, "public")))
@@ -24,23 +27,40 @@ app.use(express.static(path.join(__dirname, "public")))
 const SECRET = process.env.JWT_SECRET || "clave_secreta"
 
 /* =========================
-   ☁️ CLOUDINARY
+   ☁️ CLOUDINARY (SEGURO)
 ========================= */
+const cloudConfigured =
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET
+
+if (!cloudConfigured) {
+  console.log("⚠️ Cloudinary NO configurado")
+} else {
+  console.log("✅ Cloudinary conectado")
+}
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: async (req, file) => ({
-    folder: "iaflix",
-    resource_type: "auto"
-  })
-})
+let upload
 
-const upload = multer({ storage })
+if (cloudConfigured) {
+  const storage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => ({
+      folder: "iaflix",
+      resource_type: "auto"
+    })
+  })
+
+  upload = multer({ storage })
+} else {
+  upload = multer({ dest: "uploads/" }) // fallback
+}
 
 /* =========================
    🔒 AUTH
@@ -60,11 +80,18 @@ function auth(req, res, next) {
 }
 
 /* =========================
+   🏠 HOME (IMPORTANTE)
+========================= */
+app.get("/", (req, res) => {
+  res.send("Servidor funcionando 🚀")
+})
+
+/* =========================
    🔐 LOGIN ADMIN
 ========================= */
 app.post("/login", (req, res) => {
   if (req.body.username === "admin" && req.body.password === "1234") {
-    const token = jwt.sign({ role: "admin" }, SECRET)
+    const token = jwt.sign({ role: "admin" }, SECRET, { expiresIn: "2h" })
     return res.json({ token })
   }
   res.status(401).json({ mensaje: "Error login" })
@@ -74,10 +101,7 @@ app.post("/login", (req, res) => {
    👤 /ME
 ========================= */
 app.get("/me", auth, (req, res) => {
-  if (req.user.role === "admin") {
-    return res.json({ role: "admin" })
-  }
-  res.json({ role: "user" })
+  res.json({ role: req.user.role })
 })
 
 /* =========================
@@ -94,12 +118,10 @@ app.get("/series", async (req, res) => {
 })
 
 /* =========================
-   🗑️ ELIMINAR (FIX 404)
+   🗑️ ELIMINAR
 ========================= */
 app.delete("/serie/:id", auth, async (req, res) => {
   try {
-    console.log("🗑️ ID:", req.params.id)
-
     if (req.user.role !== "admin") {
       return res.status(403).json({ mensaje: "No autorizado" })
     }
@@ -119,7 +141,7 @@ app.delete("/serie/:id", auth, async (req, res) => {
 })
 
 /* =========================
-   📤 UPLOAD (FIX REAL)
+   📤 UPLOAD
 ========================= */
 app.post("/upload", auth, (req, res) => {
 
@@ -137,17 +159,13 @@ app.post("/upload", auth, (req, res) => {
     }
 
     try {
-      console.log("BODY:", req.body)
-      console.log("FILES:", req.files)
-
       if (req.user.role !== "admin") {
         return res.status(403).json({ mensaje: "No autorizado" })
       }
 
       if (!req.files?.video || !req.files?.portada) {
         return res.status(400).json({
-          mensaje: "Faltan archivos",
-          files: req.files
+          mensaje: "Faltan archivos"
         })
       }
 
@@ -180,4 +198,13 @@ app.post("/upload", auth, (req, res) => {
 
   })
 
+})
+
+/* =========================
+   🚀 SERVER (CLAVE PARA RENDER)
+========================= */
+const PORT = process.env.PORT || 3000
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("🔥 servidor corriendo en puerto " + PORT)
 })
