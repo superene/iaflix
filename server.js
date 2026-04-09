@@ -18,7 +18,7 @@ app.use(cors())
 app.use(express.json())
 
 /* =========================
-   📂 SERVIR FRONTEND
+   📂 FRONTEND
 ========================= */
 app.use(express.static(path.join(__dirname, "public")))
 
@@ -28,44 +28,37 @@ app.use(express.static(path.join(__dirname, "public")))
 const SECRET = process.env.JWT_SECRET || "clave_secreta"
 
 /* =========================
-   ☁️ CLOUDINARY (FIX REAL)
+   ☁️ CLOUDINARY (OBLIGATORIO)
 ========================= */
-const cloudConfigured =
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
+const cloud_name = process.env.CLOUDINARY_CLOUD_NAME
+const api_key = process.env.CLOUDINARY_API_KEY
+const api_secret = process.env.CLOUDINARY_API_SECRET
 
-if (!cloudConfigured) {
-  console.log("⚠️ Cloudinary NO configurado")
-} else {
-  console.log("✅ Cloudinary OK")
+if (!cloud_name || !api_key || !api_secret) {
+  console.error("❌ ERROR: Cloudinary no configurado")
+  process.exit(1)
 }
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name,
+  api_key,
+  api_secret
 })
 
+console.log("✅ Cloudinary conectado")
+
 /* =========================
-   📦 MULTER (SEGURO)
+   📦 MULTER CLOUDINARY
 ========================= */
-let upload
-
-if (cloudConfigured) {
-  const storage = new CloudinaryStorage({
-    cloudinary,
-    params: async (req, file) => ({
-      folder: "iaflix",
-      resource_type: "auto"
-    })
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => ({
+    folder: "iaflix",
+    resource_type: "auto"
   })
+})
 
-  upload = multer({ storage })
-} else {
-  // fallback (NO CRASHEA)
-  upload = multer({ dest: "uploads/" })
-}
+const upload = multer({ storage })
 
 /* =========================
    🔒 AUTH
@@ -138,7 +131,7 @@ app.post("/register", async (req, res) => {
     res.json({ mensaje: "Usuario creado" })
 
   } catch (err) {
-    console.error("REGISTER ERROR:", err)
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -166,7 +159,7 @@ app.post("/login-user", async (req, res) => {
     res.json({ token })
 
   } catch (err) {
-    console.error("LOGIN USER ERROR:", err)
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -194,39 +187,13 @@ app.get("/me", auth, async (req, res) => {
     res.json({
       username: user.username,
       role: "user",
-      perfiles: user.perfiles || [],
-      perfilActivo: user.perfilActivo || null
+      perfiles: user.perfiles,
+      perfilActivo: user.perfilActivo
     })
 
   } catch (err) {
-    console.error("ME ERROR:", err)
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
-  }
-})
-
-/* =========================
-   🎭 PERFIL
-========================= */
-app.post("/perfil", auth, async (req, res) => {
-  try {
-    const { nombre } = req.body
-
-    const user = await User.findById(req.user.id)
-
-    const existe = user?.perfiles.find(p => p.nombre === nombre)
-
-    if (!existe) {
-      return res.status(400).json({ mensaje: "Perfil inválido" })
-    }
-
-    user.perfilActivo = nombre
-    await user.save()
-
-    res.json({ ok: true })
-
-  } catch (err) {
-    console.error("PERFIL ERROR:", err)
-    res.status(500).json({ mensaje: "Error perfil" })
   }
 })
 
@@ -238,13 +205,13 @@ app.get("/series", async (req, res) => {
     const data = await Serie.find().sort({ createdAt: -1 })
     res.json(data)
   } catch (err) {
-    console.error("SERIES ERROR:", err)
+    console.error(err)
     res.status(500).json({ error: "Error obteniendo series" })
   }
 })
 
 /* =========================
-   📤 UPLOAD (ANTI CRASH)
+   📤 UPLOAD (FIX FINAL)
 ========================= */
 app.post(
   "/upload",
@@ -255,25 +222,25 @@ app.post(
   ]),
   async (req, res) => {
     try {
-      console.log("📥 BODY:", req.body)
-      console.log("📂 FILES:", req.files)
-
       if (req.user.role !== "admin") {
         return res.status(403).json({ mensaje: "No autorizado" })
       }
 
-      if (!req.files?.portada || !req.files?.video) {
-        return res.status(400).json({
-          mensaje: "Faltan archivos"
-        })
+      if (!req.files?.video || !req.files?.portada) {
+        return res.status(400).json({ mensaje: "Faltan archivos" })
       }
+
+      const videoUrl = req.files.video[0].path
+      const portadaUrl = req.files.portada[0].path
+
+      console.log("🎥 VIDEO:", videoUrl)
 
       const serie = new Serie({
         titulo: req.body.titulo,
         descripcion: req.body.descripcion,
         tipo: req.body.tipo,
-        portada: req.files.portada[0].path,
-        video: req.files.video[0].path
+        portada: portadaUrl,
+        video: videoUrl
       })
 
       await serie.save()
@@ -281,12 +248,8 @@ app.post(
       res.json({ mensaje: "Subido correctamente 🚀" })
 
     } catch (err) {
-      console.error("💥 ERROR UPLOAD:", err)
-
-      res.status(500).json({
-        mensaje: "Error upload",
-        error: err.message
-      })
+      console.error("UPLOAD ERROR:", err)
+      res.status(500).json({ mensaje: "Error upload", error: err.message })
     }
   }
 )
