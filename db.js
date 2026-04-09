@@ -8,21 +8,16 @@ if (!MONGO_URI) {
 }
 
 /* =========================
-   🔌 CONFIG GLOBAL
+   🔌 CONFIG
 ========================= */
 mongoose.set("strictQuery", true)
 
 /* =========================
-   🔌 CONEXIÓN ROBUSTA
+   🔌 CONEXIÓN MODERNA
 ========================= */
 async function connectDB() {
   try {
-    await mongoose.connect(MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 10000, // evita que se quede colgado
-      socketTimeoutMS: 45000
-    })
+    await mongoose.connect(MONGO_URI)
 
     console.log("✅ Mongo conectado")
 
@@ -49,9 +44,6 @@ mongoose.connection.on("disconnected", () => {
   console.warn("⚠️ Mongo desconectado")
 })
 
-/* =========================
-   🔄 RECONEXIÓN AUTOMÁTICA
-========================= */
 mongoose.connection.on("reconnected", () => {
   console.log("🔁 Mongo reconectado")
 })
