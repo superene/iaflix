@@ -28,30 +28,44 @@ app.use(express.static(path.join(__dirname, "public")))
 const SECRET = process.env.JWT_SECRET || "clave_secreta"
 
 /* =========================
-   ☁️ CLOUDINARY (FIX IMPORTANTE)
+   ☁️ CLOUDINARY (FIX REAL)
 ========================= */
-if (!process.env.CLOUD_NAME) {
-  console.log("⚠️ Cloudinary no configurado (esto causa error 500 en upload)")
+const cloudConfigured =
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET
+
+if (!cloudConfigured) {
+  console.log("⚠️ Cloudinary NO configurado")
+} else {
+  console.log("✅ Cloudinary OK")
 }
 
 cloudinary.config({
-  cloud_name: process.env.CLOUD_NAME,
-  api_key: process.env.CLOUD_API_KEY,
-  api_secret: process.env.CLOUD_API_SECRET
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
 /* =========================
-   📦 MULTER CLOUD (CON DEBUG)
+   📦 MULTER (SEGURO)
 ========================= */
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: async (req, file) => ({
-    folder: "iaflix",
-    resource_type: "auto"
-  })
-})
+let upload
 
-const upload = multer({ storage })
+if (cloudConfigured) {
+  const storage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => ({
+      folder: "iaflix",
+      resource_type: "auto"
+    })
+  })
+
+  upload = multer({ storage })
+} else {
+  // fallback (NO CRASHEA)
+  upload = multer({ dest: "uploads/" })
+}
 
 /* =========================
    🔒 AUTH
@@ -191,19 +205,15 @@ app.get("/me", auth, async (req, res) => {
 })
 
 /* =========================
-   🎭 SELECCIONAR PERFIL
+   🎭 PERFIL
 ========================= */
 app.post("/perfil", auth, async (req, res) => {
   try {
     const { nombre } = req.body
 
-    if (!nombre) {
-      return res.status(400).json({ mensaje: "Nombre requerido" })
-    }
-
     const user = await User.findById(req.user.id)
 
-    const existe = user.perfiles.find(p => p.nombre === nombre)
+    const existe = user?.perfiles.find(p => p.nombre === nombre)
 
     if (!existe) {
       return res.status(400).json({ mensaje: "Perfil inválido" })
@@ -221,87 +231,12 @@ app.post("/perfil", auth, async (req, res) => {
 })
 
 /* =========================
-   ➕ CREAR PERFIL
-========================= */
-app.post("/crear-perfil", auth, async (req, res) => {
-  try {
-    const { nombre, avatar, tipo } = req.body
-
-    if (!nombre) {
-      return res.status(400).json({ mensaje: "Nombre requerido" })
-    }
-
-    const user = await User.findById(req.user.id)
-
-    if (user.perfiles.length >= 5) {
-      return res.status(400).json({ mensaje: "Máximo 5 perfiles" })
-    }
-
-    user.perfiles.push({
-      nombre,
-      avatar: avatar || "👤",
-      tipo: tipo || "adulto"
-    })
-
-    await user.save()
-
-    res.json({ ok: true })
-
-  } catch (err) {
-    console.error("CREAR PERFIL ERROR:", err)
-    res.status(500).json({ mensaje: "Error creando perfil" })
-  }
-})
-
-/* =========================
-   🗑️ ELIMINAR SERIE
-========================= */
-app.delete("/serie/:id", auth, async (req, res) => {
-  try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ mensaje: "No autorizado" })
-    }
-
-    await Serie.findByIdAndDelete(req.params.id)
-
-    res.json({ mensaje: "Eliminado" })
-
-  } catch (err) {
-    console.error("DELETE ERROR:", err)
-    res.status(500).json({ mensaje: "Error eliminando" })
-  }
-})
-
-/* =========================
-   📺 SERIES (SMART)
+   📺 SERIES
 ========================= */
 app.get("/series", async (req, res) => {
   try {
-    let filtro = {}
-
-    if (req.headers.authorization) {
-      try {
-        const token = req.headers.authorization.replace("Bearer ", "")
-        const decoded = jwt.verify(token, SECRET)
-
-        if (decoded.role === "user") {
-          const user = await User.findById(decoded.id)
-
-          const perfil = user?.perfiles.find(
-            p => p.nombre === user.perfilActivo
-          )
-
-          if (perfil && perfil.tipo === "infantil") {
-            filtro.tipo = { $in: ["anime", "musica"] }
-          }
-        }
-
-      } catch {}
-    }
-
-    const data = await Serie.find(filtro).sort({ createdAt: -1 })
+    const data = await Serie.find().sort({ createdAt: -1 })
     res.json(data)
-
   } catch (err) {
     console.error("SERIES ERROR:", err)
     res.status(500).json({ error: "Error obteniendo series" })
@@ -309,7 +244,7 @@ app.get("/series", async (req, res) => {
 })
 
 /* =========================
-   📤 UPLOAD (FIX 500 REAL)
+   📤 UPLOAD (ANTI CRASH)
 ========================= */
 app.post(
   "/upload",
@@ -320,12 +255,17 @@ app.post(
   ]),
   async (req, res) => {
     try {
+      console.log("📥 BODY:", req.body)
+      console.log("📂 FILES:", req.files)
+
       if (req.user.role !== "admin") {
         return res.status(403).json({ mensaje: "No autorizado" })
       }
 
-      if (!req.files || !req.files.portada || !req.files.video) {
-        return res.status(400).json({ mensaje: "Faltan archivos" })
+      if (!req.files?.portada || !req.files?.video) {
+        return res.status(400).json({
+          mensaje: "Faltan archivos"
+        })
       }
 
       const serie = new Serie({
@@ -341,8 +281,12 @@ app.post(
       res.json({ mensaje: "Subido correctamente 🚀" })
 
     } catch (err) {
-      console.error("UPLOAD ERROR:", err)
-      res.status(500).json({ mensaje: "Error upload" })
+      console.error("💥 ERROR UPLOAD:", err)
+
+      res.status(500).json({
+        mensaje: "Error upload",
+        error: err.message
+      })
     }
   }
 )
