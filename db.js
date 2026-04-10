@@ -3,63 +3,37 @@ const mongoose = require("mongoose")
 const MONGO_URI = process.env.MONGO_URI
 
 if (!MONGO_URI) {
-  console.error("❌ ERROR: MONGO_URI no definida")
-  process.exit(1)
+  console.error("❌ MONGO_URI no definida")
 }
 
 /* =========================
-   🔧 CONFIG GLOBAL
-========================= */
-mongoose.set("strictQuery", true)
-
-/* =========================
-   🔌 CONEXIÓN ROBUSTA
+   🔌 CONEXIÓN SEGURA
 ========================= */
 async function connectDB() {
   try {
-    await mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 10000, // evita cuelgues largos
-      socketTimeoutMS: 45000
-    })
-
+    await mongoose.connect(MONGO_URI)
     console.log("✅ Mongo conectado")
-
   } catch (err) {
     console.error("❌ Error MongoDB:", err.message)
-
-    // 🔁 reintento automático (NO mata el server)
-    setTimeout(connectDB, 5000)
+    // ❌ NO matar servidor
   }
 }
 
 connectDB()
 
 /* =========================
-   ⚠️ EVENTOS
+   EVENTOS
 ========================= */
 mongoose.connection.on("connected", () => {
-  console.log("🟢 MongoDB listo")
+  console.log("🟢 Mongo listo")
 })
 
 mongoose.connection.on("error", err => {
-  console.error("❌ Error conexión:", err.message)
+  console.error("❌ Mongo error:", err.message)
 })
 
 mongoose.connection.on("disconnected", () => {
-  console.warn("⚠️ Mongo desconectado → reconectando...")
-})
-
-mongoose.connection.on("reconnected", () => {
-  console.log("🔁 Mongo reconectado")
-})
-
-/* =========================
-   🛑 CIERRE LIMPIO
-========================= */
-process.on("SIGINT", async () => {
-  await mongoose.connection.close()
-  console.log("🔴 Mongo cerrado")
-  process.exit(0)
+  console.warn("⚠️ Mongo desconectado")
 })
 
 module.exports = mongoose
