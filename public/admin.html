@@ -87,8 +87,8 @@ const API = location.hostname.includes("localhost")
   ? "http://localhost:3000"
   : "https://iaflix.onrender.com"
 
-// 🔥 PON TU CLOUD NAME AQUÍ
-const CLOUD_NAME = "TU_CLOUD_NAME"
+// 🔥 PON TU CLOUDINARY REAL
+const CLOUD_NAME = "dbba3ioj0"
 
 /* =========================
    🔐 VALIDAR ADMIN
@@ -144,8 +144,8 @@ async function cargarContenido() {
       cont.appendChild(div)
     })
 
-  } catch {
-    console.log("Error cargando contenido")
+  } catch (err) {
+    console.log("Error cargando contenido", err)
   }
 }
 
@@ -155,12 +155,20 @@ async function cargarContenido() {
 async function eliminar(id) {
   if (!confirm("¿Eliminar contenido?")) return
 
-  await fetch(API + "/serie/" + id, {
-    method: "DELETE",
-    headers: { Authorization: "Bearer " + token }
-  })
+  try {
+    const res = await fetch(API + "/serie/" + id, {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token }
+    })
 
-  cargarContenido()
+    const data = await res.json()
+    alert(data.mensaje || "Eliminado")
+
+    cargarContenido()
+
+  } catch {
+    alert("Error eliminando")
+  }
 }
 
 /* =========================
@@ -178,7 +186,7 @@ document.getElementById("portadaInput").addEventListener("change", e => {
 })
 
 /* =========================
-   📤 SUBIR PRO (CLOUDINARY DIRECTO)
+   📤 SUBIDA PRO REAL
 ========================= */
 document.getElementById("form").onsubmit = async (e) => {
   e.preventDefault()
@@ -187,13 +195,21 @@ document.getElementById("form").onsubmit = async (e) => {
   const status = document.getElementById("status")
 
   btn.disabled = true
-  status.innerText = "Subiendo a la nube..."
+  status.innerText = "Subiendo..."
 
   try {
     const videoFile = document.getElementById("videoInput").files[0]
     const portadaFile = document.getElementById("portadaInput").files[0]
 
-    // 🔥 subir video
+    if (!videoFile || !portadaFile) {
+      alert("Faltan archivos")
+      btn.disabled = false
+      return
+    }
+
+    /* =========================
+       🎥 SUBIR VIDEO
+    ========================= */
     const dataVideo = new FormData()
     dataVideo.append("file", videoFile)
     dataVideo.append("upload_preset", "iaflix_upload")
@@ -205,7 +221,13 @@ document.getElementById("form").onsubmit = async (e) => {
 
     const videoJson = await resVideo.json()
 
-    // 🔥 subir portada
+    if (!videoJson.secure_url) {
+      throw new Error("Error subiendo video")
+    }
+
+    /* =========================
+       🖼️ SUBIR IMAGEN
+    ========================= */
     const dataImg = new FormData()
     dataImg.append("file", portadaFile)
     dataImg.append("upload_preset", "iaflix_upload")
@@ -217,10 +239,14 @@ document.getElementById("form").onsubmit = async (e) => {
 
     const imgJson = await resImg.json()
 
-    status.innerText = "Guardando en servidor..."
+    if (!imgJson.secure_url) {
+      throw new Error("Error subiendo imagen")
+    }
 
-    // 🔥 guardar en backend
-    await fetch(API + "/upload", {
+    /* =========================
+       💾 GUARDAR EN BACKEND
+    ========================= */
+    const resSave = await fetch(API + "/upload", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -235,17 +261,24 @@ document.getElementById("form").onsubmit = async (e) => {
       })
     })
 
+    const saveData = await resSave.json()
+
+    if (!resSave.ok) {
+      throw new Error(saveData.mensaje || "Error guardando")
+    }
+
     status.innerText = "✅ Subido correctamente"
     alert("🔥 Contenido subido PRO")
 
     e.target.reset()
     document.getElementById("preview").innerHTML = ""
+
     cargarContenido()
 
   } catch (err) {
     console.error(err)
     status.innerText = "❌ Error"
-    alert("Error subiendo contenido")
+    alert(err.message || "Error subiendo contenido")
   }
 
   btn.disabled = false

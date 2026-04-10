@@ -1,12 +1,8 @@
 const express = require("express")
 const cors = require("cors")
-const multer = require("multer")
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
 const path = require("path")
-
-const { CloudinaryStorage } = require("multer-storage-cloudinary")
-const cloudinary = require("cloudinary").v2
 
 require("./db")
 const User = require("./models/User")
@@ -18,53 +14,13 @@ const app = express()
    ⚙️ CONFIG
 ========================= */
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: "50mb" })) // 🔥 importante
 app.use(express.static(path.join(__dirname, "public")))
-app.use("/uploads", express.static(path.join(__dirname, "uploads")))
 
 /* =========================
    🔑 SECRET
 ========================= */
 const SECRET = process.env.JWT_SECRET || "clave_secreta"
-
-/* =========================
-   ☁️ CLOUDINARY (PRO)
-========================= */
-const cloudConfigured =
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-})
-
-if (cloudConfigured) {
-  console.log("✅ Cloudinary activo")
-} else {
-  console.log("⚠️ Cloudinary NO configurado (modo local)")
-}
-
-/* =========================
-   📦 STORAGE
-========================= */
-let upload
-
-if (cloudConfigured) {
-  const storage = new CloudinaryStorage({
-    cloudinary,
-    params: async (req, file) => ({
-      folder: "iaflix",
-      resource_type: "auto"
-    })
-  })
-
-  upload = multer({ storage })
-} else {
-  upload = multer({ dest: "uploads/" })
-}
 
 /* =========================
    🔒 AUTH
@@ -126,7 +82,7 @@ app.post("/register", async (req, res) => {
     res.json({ mensaje: "Usuario creado" })
 
   } catch (err) {
-    console.error("REGISTER ERROR:", err)
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -165,7 +121,6 @@ app.post("/login-user", async (req, res) => {
     res.json({ token })
 
   } catch (err) {
-    console.error("LOGIN USER ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -197,8 +152,7 @@ app.get("/me", auth, async (req, res) => {
       perfilActivo: user.perfilActivo || null
     })
 
-  } catch (err) {
-    console.error("ME ERROR:", err)
+  } catch {
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -221,8 +175,7 @@ app.post("/perfil", auth, async (req, res) => {
 
     res.json({ ok: true })
 
-  } catch (err) {
-    console.error("PERFIL ERROR:", err)
+  } catch {
     res.status(500).json({ mensaje: "Error perfil" })
   }
 })
@@ -234,13 +187,13 @@ app.get("/series", async (req, res) => {
   try {
     const data = await Serie.find().sort({ createdAt: -1 })
     res.json(data)
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Error obteniendo series" })
   }
 })
 
 /* =========================
-   📤 UPLOAD
+   📤 UPLOAD (FINAL PRO)
 ========================= */
 app.post("/upload", auth, async (req, res) => {
   try {
@@ -250,7 +203,7 @@ app.post("/upload", auth, async (req, res) => {
 
     const { titulo, descripcion, tipo, video, portada } = req.body
 
-    if (!video || !portada) {
+    if (!titulo || !video || !portada) {
       return res.status(400).json({ mensaje: "Faltan datos" })
     }
 
@@ -267,7 +220,7 @@ app.post("/upload", auth, async (req, res) => {
     res.json({ mensaje: "Subido correctamente 🚀" })
 
   } catch (err) {
-    console.error("UPLOAD ERROR:", err)
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
