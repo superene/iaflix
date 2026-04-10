@@ -19,11 +19,7 @@ const app = express()
 ========================= */
 app.use(cors())
 app.use(express.json())
-
-// servir frontend
 app.use(express.static(path.join(__dirname, "public")))
-
-// servir uploads locales
 app.use("/uploads", express.static(path.join(__dirname, "uploads")))
 
 /* =========================
@@ -39,23 +35,17 @@ const cloudConfigured =
   process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET
 
-if (cloudConfigured) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-  })
-  console.log("✅ Cloudinary conectado")
-} else {
-  console.log("⚠️ Cloudinary NO configurado (modo local)")
-}
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+})
 
-/* =========================
-   📦 MULTER
-========================= */
 let upload
 
 if (cloudConfigured) {
+  console.log("✅ Cloudinary activo")
+
   const storage = new CloudinaryStorage({
     cloudinary,
     params: async () => ({
@@ -63,8 +53,10 @@ if (cloudConfigured) {
       resource_type: "auto"
     })
   })
+
   upload = multer({ storage })
 } else {
+  console.log("⚠️ Cloudinary OFF (modo local)")
   upload = multer({ dest: "uploads/" })
 }
 
@@ -74,22 +66,13 @@ if (cloudConfigured) {
 function auth(req, res, next) {
   let token = req.headers.authorization
 
-  if (!token) {
-    return res.status(403).json({ mensaje: "Sin token" })
-  }
+  if (!token) return res.status(403).json({ mensaje: "Sin token" })
 
   try {
     token = token.replace("Bearer ", "")
-    const decoded = jwt.verify(token, SECRET)
-
-    if (!decoded) {
-      return res.status(401).json({ mensaje: "Token inválido" })
-    }
-
-    req.user = decoded
+    req.user = jwt.verify(token, SECRET)
     next()
-
-  } catch (err) {
+  } catch {
     return res.status(401).json({ mensaje: "Token inválido" })
   }
 }
@@ -98,7 +81,7 @@ function auth(req, res, next) {
    🏠 HOME
 ========================= */
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"))
+  res.send("IAFLIX backend funcionando 🚀")
 })
 
 /* =========================
@@ -112,9 +95,7 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ mensaje: "Datos incompletos" })
     }
 
-    const existe = await User.findOne({
-      username: username.toLowerCase()
-    })
+    const existe = await User.findOne({ username: username.toLowerCase() })
 
     if (existe) {
       return res.status(400).json({ mensaje: "Usuario ya existe" })
@@ -126,9 +107,11 @@ app.post("/register", async (req, res) => {
       username: username.toLowerCase(),
       password: hash,
       perfiles: [
-        { nombre: "Principal", avatar: "👤", tipo: "adulto" }
+        { nombre: "Principal", avatar: "👤" }
       ],
-      perfilActivo: "Principal"
+      perfilActivo: null,
+      favoritos: [],
+      historial: []
     })
 
     await user.save()
@@ -136,24 +119,13 @@ app.post("/register", async (req, res) => {
     res.json({ mensaje: "Usuario creado" })
 
   } catch (err) {
-    console.error("REGISTER ERROR:", err)
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
 
 /* =========================
-   🔐 LOGIN ADMIN
-========================= */
-app.post("/login", (req, res) => {
-  if (req.body.username === "admin" && req.body.password === "1234") {
-    const token = jwt.sign({ role: "admin" }, SECRET, { expiresIn: "2h" })
-    return res.json({ token })
-  }
-  res.status(401).json({ mensaje: "Error login" })
-})
-
-/* =========================
-   👤 LOGIN USER
+   🔐 LOGIN USER
 ========================= */
 app.post("/login-user", async (req, res) => {
   try {
@@ -175,71 +147,43 @@ app.post("/login-user", async (req, res) => {
     res.json({ token })
 
   } catch (err) {
-    console.error("LOGIN USER ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
 
 /* =========================
-   👤 /ME
+   👤 /ME (FIX PERFIL)
 ========================= */
 app.get("/me", auth, async (req, res) => {
   try {
-    if (req.user.role === "admin") {
-      return res.json({
-        role: "admin",
-        perfiles: [{ nombre: "Admin", avatar: "👑" }]
-      })
-    }
-
     const user = await User.findById(req.user.id)
 
-    if (!user) {
-      return res.status(404).json({ mensaje: "Usuario no encontrado" })
-    }
-
     res.json({
-      role: "user",
-      perfiles: user.perfiles || [],
-      perfilActivo: user.perfilActivo || null
+      username: user.username,
+      perfiles: user.perfiles,
+      perfilActivo: user.perfilActivo
     })
 
-  } catch (err) {
-    console.error("ME ERROR:", err)
-    res.status(500).json({ mensaje: "Error servidor" })
+  } catch {
+    res.status(500).json({ mensaje: "Error" })
   }
 })
 
 /* =========================
-   🎭 SELECCIONAR PERFIL (FIX 502)
+   🎭 SELECCIONAR PERFIL
 ========================= */
 app.post("/perfil", auth, async (req, res) => {
   try {
-    const { nombre } = req.body
-
-    if (!nombre) {
-      return res.status(400).json({ mensaje: "Nombre requerido" })
-    }
-
     const user = await User.findById(req.user.id)
 
-    if (!user) {
-      return res.status(404).json({ mensaje: "Usuario no encontrado" })
-    }
+    user.perfilActivo = req.body.nombre
 
-    const existe = user.perfiles.find(p => p.nombre === nombre)
-
-    if (!existe) {
-      return res.status(400).json({ mensaje: "Perfil inválido" })
-    }
-
-    user.perfilActivo = nombre
     await user.save()
 
     res.json({ ok: true })
 
   } catch (err) {
-    console.error("PERFIL ERROR:", err)
+    console.error(err)
     res.status(500).json({ mensaje: "Error perfil" })
   }
 })
@@ -248,36 +192,50 @@ app.post("/perfil", auth, async (req, res) => {
    📺 SERIES
 ========================= */
 app.get("/series", async (req, res) => {
-  try {
-    const data = await Serie.find().sort({ createdAt: -1 })
-    res.json(data)
-  } catch (err) {
-    console.error("SERIES ERROR:", err)
-    res.status(500).json({ error: "Error obteniendo series" })
-  }
+  const data = await Serie.find().sort({ createdAt: -1 })
+  res.json(data)
 })
 
 /* =========================
-   🗑️ ELIMINAR
+   ⭐ FAVORITOS
 ========================= */
-app.delete("/serie/:id", auth, async (req, res) => {
-  try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ mensaje: "No autorizado" })
-    }
+app.post("/favoritos/:id", auth, async (req, res) => {
+  const user = await User.findById(req.user.id)
 
-    const eliminado = await Serie.findByIdAndDelete(req.params.id)
-
-    if (!eliminado) {
-      return res.status(404).json({ mensaje: "No encontrado" })
-    }
-
-    res.json({ mensaje: "Eliminado correctamente" })
-
-  } catch (err) {
-    console.error("DELETE ERROR:", err)
-    res.status(500).json({ mensaje: "Error eliminando" })
+  if (!user.favoritos.includes(req.params.id)) {
+    user.favoritos.push(req.params.id)
+    await user.save()
   }
+
+  res.json({ ok: true })
+})
+
+app.get("/favoritos", auth, async (req, res) => {
+  const user = await User.findById(req.user.id).populate("favoritos")
+  res.json(user.favoritos)
+})
+
+/* =========================
+   🕓 HISTORIAL
+========================= */
+app.post("/historial/:id", auth, async (req, res) => {
+  const user = await User.findById(req.user.id)
+
+  user.historial.push({
+    serie: req.params.id,
+    tiempo: req.body.tiempo
+  })
+
+  await user.save()
+
+  res.json({ ok: true })
+})
+
+app.get("/historial", auth, async (req, res) => {
+  const user = await User.findById(req.user.id)
+    .populate("historial.serie")
+
+  res.json(user.historial)
 })
 
 /* =========================
@@ -291,37 +249,27 @@ app.post("/upload", auth, (req, res) => {
   ])(req, res, async (err) => {
 
     if (err) {
-      console.error("MULTER ERROR:", err)
       return res.status(500).json({ mensaje: err.message })
     }
 
     try {
-      if (req.user.role !== "admin") {
-        return res.status(403).json({ mensaje: "No autorizado" })
-      }
-
-      if (!req.files?.video || !req.files?.portada) {
-        return res.status(400).json({ mensaje: "Faltan archivos" })
-      }
-
-      const videoUrl = req.files.video[0].path
-      const portadaUrl = req.files.portada[0].path
+      const video = req.files.video[0].path
+      const portada = req.files.portada[0].path
 
       const serie = new Serie({
         titulo: req.body.titulo,
         descripcion: req.body.descripcion,
         tipo: req.body.tipo,
-        portada: portadaUrl,
-        video: videoUrl
+        portada,
+        video
       })
 
       await serie.save()
 
-      res.json({ mensaje: "Subido correctamente 🚀" })
+      res.json({ ok: true })
 
-    } catch (error) {
-      console.error("UPLOAD ERROR:", error)
-      res.status(500).json({ mensaje: "Error upload" })
+    } catch (e) {
+      res.status(500).json({ mensaje: e.message })
     }
 
   })
@@ -329,18 +277,10 @@ app.post("/upload", auth, (req, res) => {
 })
 
 /* =========================
-   🚨 ERROR GLOBAL
-========================= */
-app.use((err, req, res, next) => {
-  console.error("ERROR GLOBAL:", err)
-  res.status(500).json({ mensaje: "Error interno servidor" })
-})
-
-/* =========================
-   🚀 SERVER (FIX RENDER)
+   🚀 SERVER
 ========================= */
 const PORT = process.env.PORT || 10000
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("🔥 servidor corriendo en puerto " + PORT)
+  console.log("🔥 SERVER RUNNING " + PORT)
 })
