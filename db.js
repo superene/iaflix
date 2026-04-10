@@ -7,26 +7,34 @@ if (!MONGO_URI) {
 }
 
 /* =========================
-   🔌 CONEXIÓN SEGURA
+   🔌 CONFIG GLOBAL
+========================= */
+mongoose.set("strictQuery", true)
+
+/* =========================
+   🔌 CONEXIÓN ROBUSTA
 ========================= */
 async function connectDB() {
   try {
     await mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 10000
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000
     })
 
     console.log("✅ Mongo conectado")
 
   } catch (err) {
-    console.error("❌ Error MongoDB:", err.message)
-    // ⚠️ NO cerrar servidor
+    console.error("❌ Mongo ERROR:", err.message)
+
+    // 🔁 REINTENTO AUTOMÁTICO (CLAVE)
+    setTimeout(connectDB, 5000)
   }
 }
 
 connectDB()
 
 /* =========================
-   EVENTOS
+   ⚠️ EVENTOS
 ========================= */
 mongoose.connection.on("connected", () => {
   console.log("🟢 Mongo listo")
@@ -38,6 +46,22 @@ mongoose.connection.on("error", err => {
 
 mongoose.connection.on("disconnected", () => {
   console.warn("⚠️ Mongo desconectado")
+
+  // 🔁 RECONEXIÓN AUTOMÁTICA
+  setTimeout(connectDB, 5000)
+})
+
+mongoose.connection.on("reconnected", () => {
+  console.log("🔁 Mongo reconectado")
+})
+
+/* =========================
+   🛑 CIERRE LIMPIO
+========================= */
+process.on("SIGINT", async () => {
+  await mongoose.connection.close()
+  console.log("🔴 Mongo cerrado")
+  process.exit(0)
 })
 
 module.exports = mongoose
