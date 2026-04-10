@@ -58,10 +58,10 @@ button:disabled { background:gray; }
 <div id="listaAdmin"></div>
 
 <form id="form">
-<input type="text" name="titulo" placeholder="Título" required>
-<textarea name="descripcion" placeholder="Descripción"></textarea>
+<input type="text" id="titulo" placeholder="Título" required>
+<textarea id="descripcion" placeholder="Descripción"></textarea>
 
-<select name="tipo" required>
+<select id="tipo" required>
   <option value="">Tipo</option>
   <option value="serie">Serie</option>
   <option value="pelicula">Película</option>
@@ -70,12 +70,12 @@ button:disabled { background:gray; }
 </select>
 
 <label>Portada</label>
-<input type="file" id="portadaInput" name="portada" accept="image/*" required>
+<input type="file" id="portadaInput" accept="image/*" required>
 
 <div id="preview"></div>
 
 <label>Video</label>
-<input type="file" name="video" accept="video/*" required>
+<input type="file" id="videoInput" accept="video/*" required>
 
 <button id="btnSubir">Subir</button>
 
@@ -87,14 +87,16 @@ const API = location.hostname.includes("localhost")
   ? "http://localhost:3000"
   : "https://iaflix.onrender.com"
 
+// 🔥 PON TU CLOUD NAME AQUÍ
+const CLOUD_NAME = "TU_CLOUD_NAME"
+
 /* =========================
-   🔐 VALIDAR ADMIN (FIX REAL)
+   🔐 VALIDAR ADMIN
 ========================= */
 function validarAdmin() {
   const token = localStorage.getItem("token")
 
   if (!token) {
-    alert("Debes iniciar sesión")
     location.href = "/login.html"
     return null
   }
@@ -103,7 +105,6 @@ function validarAdmin() {
     const payload = JSON.parse(atob(token.split(".")[1]))
 
     if (payload.role !== "admin") {
-      alert("No eres admin")
       localStorage.removeItem("token")
       location.href = "/login.html"
       return null
@@ -111,8 +112,7 @@ function validarAdmin() {
 
     return token
 
-  } catch (err) {
-    console.log("Token inválido")
+  } catch {
     localStorage.removeItem("token")
     location.href = "/login.html"
     return null
@@ -127,21 +127,10 @@ const token = validarAdmin()
 async function cargarContenido() {
   try {
     const res = await fetch(API + "/series")
-
-    const text = await res.text()
-
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch {
-      console.error("Respuesta no JSON:", text)
-      return
-    }
+    const data = await res.json()
 
     const cont = document.getElementById("listaAdmin")
     cont.innerHTML = ""
-
-    if (!Array.isArray(data)) return
 
     data.forEach(s => {
       const div = document.createElement("div")
@@ -166,20 +155,12 @@ async function cargarContenido() {
 async function eliminar(id) {
   if (!confirm("¿Eliminar contenido?")) return
 
-  try {
-    const res = await fetch(API + "/serie/" + id, {
-      method: "DELETE",
-      headers: { Authorization: "Bearer " + token }
-    })
+  await fetch(API + "/serie/" + id, {
+    method: "DELETE",
+    headers: { Authorization: "Bearer " + token }
+  })
 
-    const data = await res.json().catch(()=>({}))
-
-    alert(data.mensaje || "Eliminado")
-    cargarContenido()
-
-  } catch {
-    alert("Error eliminando")
-  }
+  cargarContenido()
 }
 
 /* =========================
@@ -197,7 +178,7 @@ document.getElementById("portadaInput").addEventListener("change", e => {
 })
 
 /* =========================
-   📤 SUBIR
+   📤 SUBIR PRO (CLOUDINARY DIRECTO)
 ========================= */
 document.getElementById("form").onsubmit = async (e) => {
   e.preventDefault()
@@ -206,43 +187,65 @@ document.getElementById("form").onsubmit = async (e) => {
   const status = document.getElementById("status")
 
   btn.disabled = true
-  status.innerText = "Subiendo..."
-
-  const formData = new FormData(e.target)
+  status.innerText = "Subiendo a la nube..."
 
   try {
-    const res = await fetch(API + "/upload", {
+    const videoFile = document.getElementById("videoInput").files[0]
+    const portadaFile = document.getElementById("portadaInput").files[0]
+
+    // 🔥 subir video
+    const dataVideo = new FormData()
+    dataVideo.append("file", videoFile)
+    dataVideo.append("upload_preset", "iaflix_upload")
+
+    const resVideo = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/video/upload`,
+      { method: "POST", body: dataVideo }
+    )
+
+    const videoJson = await resVideo.json()
+
+    // 🔥 subir portada
+    const dataImg = new FormData()
+    dataImg.append("file", portadaFile)
+    dataImg.append("upload_preset", "iaflix_upload")
+
+    const resImg = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+      { method: "POST", body: dataImg }
+    )
+
+    const imgJson = await resImg.json()
+
+    status.innerText = "Guardando en servidor..."
+
+    // 🔥 guardar en backend
+    await fetch(API + "/upload", {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         Authorization: "Bearer " + token
       },
-      body: formData
+      body: JSON.stringify({
+        titulo: document.getElementById("titulo").value,
+        descripcion: document.getElementById("descripcion").value,
+        tipo: document.getElementById("tipo").value,
+        video: videoJson.secure_url,
+        portada: imgJson.secure_url
+      })
     })
 
-    const text = await res.text()
-
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch {
-      console.error("Respuesta inválida:", text)
-      throw new Error()
-    }
-
-    if (!res.ok) throw new Error(data.mensaje)
-
-    status.innerText = "✅ Subido"
-    alert("Contenido subido 🔥")
+    status.innerText = "✅ Subido correctamente"
+    alert("🔥 Contenido subido PRO")
 
     e.target.reset()
     document.getElementById("preview").innerHTML = ""
-
     cargarContenido()
 
   } catch (err) {
     console.error(err)
     status.innerText = "❌ Error"
-    alert("Error subiendo")
+    alert("Error subiendo contenido")
   }
 
   btn.disabled = false
@@ -259,9 +262,7 @@ function logout() {
 /* =========================
    🚀 INIT
 ========================= */
-if (token) {
-  cargarContenido()
-}
+if (token) cargarContenido()
 </script>
 
 </body>

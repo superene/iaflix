@@ -242,46 +242,34 @@ app.get("/series", async (req, res) => {
 /* =========================
    📤 UPLOAD
 ========================= */
-app.post("/upload", auth, (req, res) => {
-
-  upload.fields([
-    { name: "video", maxCount: 1 },
-    { name: "portada", maxCount: 1 }
-  ])(req, res, async (err) => {
-
-    if (err) {
-      console.error("MULTER ERROR:", err)
-      return res.status(500).json({ mensaje: err.message })
+app.post("/upload", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ mensaje: "No autorizado" })
     }
 
-    try {
-      if (req.user.role !== "admin") {
-        return res.status(403).json({ mensaje: "No autorizado" })
-      }
+    const { titulo, descripcion, tipo, video, portada } = req.body
 
-      if (!req.files?.video || !req.files?.portada) {
-        return res.status(400).json({ mensaje: "Faltan archivos" })
-      }
-
-      const serie = new Serie({
-        titulo: req.body.titulo,
-        descripcion: req.body.descripcion,
-        tipo: req.body.tipo,
-        portada: req.files.portada[0].path,
-        video: req.files.video[0].path
-      })
-
-      await serie.save()
-
-      res.json({ mensaje: "Subido correctamente 🚀" })
-
-    } catch (error) {
-      console.error("UPLOAD ERROR:", error)
-      res.status(500).json({ mensaje: error.message })
+    if (!video || !portada) {
+      return res.status(400).json({ mensaje: "Faltan datos" })
     }
 
-  })
+    const serie = new Serie({
+      titulo,
+      descripcion,
+      tipo,
+      video,
+      portada
+    })
 
+    await serie.save()
+
+    res.json({ mensaje: "Subido correctamente 🚀" })
+
+  } catch (err) {
+    console.error("UPLOAD ERROR:", err)
+    res.status(500).json({ mensaje: "Error servidor" })
+  }
 })
 
 /* =========================
