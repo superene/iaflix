@@ -21,13 +21,16 @@ app.use(cors())
 app.use(express.json())
 app.use(express.static(path.join(__dirname, "public")))
 
+// 🔥 IMPORTANTE: servir uploads local (fallback)
+app.use("/uploads", express.static(path.join(__dirname, "uploads")))
+
 /* =========================
    🔑 SECRET
 ========================= */
 const SECRET = process.env.JWT_SECRET || "clave_secreta"
 
 /* =========================
-   ☁️ CLOUDINARY (SEGURO)
+   ☁️ CLOUDINARY
 ========================= */
 const cloudConfigured =
   process.env.CLOUDINARY_CLOUD_NAME &&
@@ -59,7 +62,7 @@ if (cloudConfigured) {
 
   upload = multer({ storage })
 } else {
-  upload = multer({ dest: "uploads/" }) // fallback
+  upload = multer({ dest: "uploads/" })
 }
 
 /* =========================
@@ -80,10 +83,50 @@ function auth(req, res, next) {
 }
 
 /* =========================
-   🏠 HOME (IMPORTANTE)
+   🏠 HOME
 ========================= */
 app.get("/", (req, res) => {
-  res.send("Servidor funcionando 🚀")
+  res.sendFile(path.join(__dirname, "public", "index.html"))
+})
+
+/* =========================
+   👤 REGISTER (FIX 404)
+========================= */
+app.post("/register", async (req, res) => {
+  try {
+    const { username, password } = req.body
+
+    if (!username || !password) {
+      return res.status(400).json({ mensaje: "Datos incompletos" })
+    }
+
+    const existe = await User.findOne({
+      username: username.toLowerCase()
+    })
+
+    if (existe) {
+      return res.status(400).json({ mensaje: "Usuario ya existe" })
+    }
+
+    const hash = bcrypt.hashSync(password, 8)
+
+    const user = new User({
+      username: username.toLowerCase(),
+      password: hash,
+      perfiles: [
+        { nombre: "Principal", avatar: "👤", tipo: "adulto" }
+      ],
+      perfilActivo: "Principal"
+    })
+
+    await user.save()
+
+    res.json({ mensaje: "Usuario creado" })
+
+  } catch (err) {
+    console.error("REGISTER ERROR:", err)
+    res.status(500).json({ mensaje: "Error servidor" })
+  }
 })
 
 /* =========================
@@ -95,6 +138,34 @@ app.post("/login", (req, res) => {
     return res.json({ token })
   }
   res.status(401).json({ mensaje: "Error login" })
+})
+
+/* =========================
+   👤 LOGIN USER (FIX)
+========================= */
+app.post("/login-user", async (req, res) => {
+  try {
+    const user = await User.findOne({
+      username: req.body.username.toLowerCase()
+    })
+
+    if (!user) return res.status(401).json({ mensaje: "No existe" })
+
+    const valid = bcrypt.compareSync(req.body.password, user.password)
+    if (!valid) return res.status(401).json({ mensaje: "Incorrecto" })
+
+    const token = jwt.sign(
+      { id: user._id, role: "user" },
+      SECRET,
+      { expiresIn: "7d" }
+    )
+
+    res.json({ token })
+
+  } catch (err) {
+    console.error("LOGIN USER ERROR:", err)
+    res.status(500).json({ mensaje: "Error servidor" })
+  }
 })
 
 /* =========================
@@ -141,7 +212,7 @@ app.delete("/serie/:id", auth, async (req, res) => {
 })
 
 /* =========================
-   📤 UPLOAD
+   📤 UPLOAD (FIX FINAL)
 ========================= */
 app.post("/upload", auth, (req, res) => {
 
@@ -152,10 +223,7 @@ app.post("/upload", auth, (req, res) => {
 
     if (err) {
       console.error("💥 MULTER ERROR:", err)
-      return res.status(500).json({
-        mensaje: "Error subiendo archivos",
-        error: err.message
-      })
+      return res.status(500).json({ mensaje: err.message })
     }
 
     try {
@@ -164,9 +232,7 @@ app.post("/upload", auth, (req, res) => {
       }
 
       if (!req.files?.video || !req.files?.portada) {
-        return res.status(400).json({
-          mensaje: "Faltan archivos"
-        })
+        return res.status(400).json({ mensaje: "Faltan archivos" })
       }
 
       const videoUrl = req.files.video[0].path
@@ -182,18 +248,11 @@ app.post("/upload", auth, (req, res) => {
 
       await serie.save()
 
-      res.json({
-        mensaje: "Subido correctamente 🚀",
-        video: videoUrl
-      })
+      res.json({ mensaje: "Subido correctamente 🚀" })
 
     } catch (error) {
-      console.error("💥 ERROR INTERNO:", error)
-
-      res.status(500).json({
-        mensaje: "Error interno",
-        error: error.message
-      })
+      console.error("💥 ERROR:", error)
+      res.status(500).json({ mensaje: error.message })
     }
 
   })
@@ -201,7 +260,15 @@ app.post("/upload", auth, (req, res) => {
 })
 
 /* =========================
-   🚀 SERVER (FIX RENDER)
+   🚨 ERROR GLOBAL (ANTI 502)
+========================= */
+app.use((err, req, res, next) => {
+  console.error("💥 ERROR GLOBAL:", err)
+  res.status(500).json({ mensaje: "Error interno servidor" })
+})
+
+/* =========================
+   🚀 SERVER
 ========================= */
 const PORT = process.env.PORT || 10000
 
