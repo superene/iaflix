@@ -3,6 +3,10 @@ const cors = require("cors")
 const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
 const path = require("path")
+const multer = require("multer")
+
+// 🔥 CLOUDINARY (FALTABA ESTO)
+const cloudinary = require("cloudinary").v2
 
 require("./db")
 const User = require("./models/User")
@@ -14,8 +18,20 @@ const app = express()
    ⚙️ CONFIG
 ========================= */
 app.use(cors())
-app.use(express.json({ limit: "50mb" })) // 🔥 importante
+app.use(express.json({ limit: "50mb" }))
 app.use(express.static(path.join(__dirname, "public")))
+app.use("/uploads", express.static(path.join(__dirname, "uploads")))
+
+/* =========================
+   ☁️ CLOUDINARY CONFIG
+========================= */
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+})
+
+console.log("✅ Cloudinary listo")
 
 /* =========================
    🔑 SECRET
@@ -82,7 +98,7 @@ app.post("/register", async (req, res) => {
     res.json({ mensaje: "Usuario creado" })
 
   } catch (err) {
-    console.error(err)
+    console.error("REGISTER ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -121,6 +137,7 @@ app.post("/login-user", async (req, res) => {
     res.json({ token })
 
   } catch (err) {
+    console.error("LOGIN USER ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -152,7 +169,8 @@ app.get("/me", auth, async (req, res) => {
       perfilActivo: user.perfilActivo || null
     })
 
-  } catch {
+  } catch (err) {
+    console.error("ME ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
@@ -175,7 +193,8 @@ app.post("/perfil", auth, async (req, res) => {
 
     res.json({ ok: true })
 
-  } catch {
+  } catch (err) {
+    console.error("PERFIL ERROR:", err)
     res.status(500).json({ mensaje: "Error perfil" })
   }
 })
@@ -187,15 +206,15 @@ app.get("/series", async (req, res) => {
   try {
     const data = await Serie.find().sort({ createdAt: -1 })
     res.json(data)
-  } catch {
+  } catch (err) {
+    console.error("SERIES ERROR:", err)
     res.status(500).json({ error: "Error obteniendo series" })
   }
 })
 
 /* =========================
-   📤 UPLOAD (FINAL PRO)
+   📤 UPLOAD FINAL
 ========================= */
-const multer = require("multer")
 const upload = multer({ dest: "uploads/" })
 
 app.post("/upload", auth, upload.fields([
@@ -207,10 +226,13 @@ app.post("/upload", auth, upload.fields([
       return res.status(403).json({ mensaje: "No autorizado" })
     }
 
+    if (!req.files?.video || !req.files?.portada) {
+      return res.status(400).json({ mensaje: "Faltan archivos" })
+    }
+
     const videoFile = req.files.video[0]
     const portadaFile = req.files.portada[0]
 
-    // subir a cloudinary desde backend
     const videoUpload = await cloudinary.uploader.upload(videoFile.path, {
       resource_type: "video"
     })
@@ -230,8 +252,11 @@ app.post("/upload", auth, upload.fields([
     res.json({ mensaje: "Subido PRO 🔥" })
 
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ mensaje: "Error servidor" })
+    console.error("UPLOAD ERROR:", err)
+    res.status(500).json({
+      mensaje: "Error servidor",
+      error: err.message
+    })
   }
 })
 
