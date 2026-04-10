@@ -171,8 +171,32 @@ app.post("/login-user", async (req, res) => {
 /* =========================
    👤 /ME
 ========================= */
-app.get("/me", auth, (req, res) => {
-  res.json({ role: req.user.role })
+app.get("/me", auth, async (req, res) => {
+  try {
+    if (req.user.role === "admin") {
+      return res.json({
+        role: "admin",
+        perfiles: [
+          { nombre: "Admin", avatar: "👑" }
+        ]
+      })
+    }
+
+    const user = await User.findById(req.user.id)
+
+    if (!user) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" })
+    }
+
+    res.json({
+      role: "user",
+      perfiles: user.perfiles || []
+    })
+
+  } catch (err) {
+    console.error("ME ERROR:", err)
+    res.status(500).json({ mensaje: "Error servidor" })
+  }
 })
 
 /* =========================

@@ -62,9 +62,7 @@ h1 {
 
 <script>
 
-/* =========================
-   🌐 API DINÁMICA PRO
-========================= */
+
 const API = location.hostname.includes("localhost")
   ? "http://localhost:3000"
   : "https://iaflix.onrender.com"
@@ -92,14 +90,17 @@ async function cargarPerfiles() {
 
     const user = await res.json()
 
-    if (!user || !Array.isArray(user.perfiles)) {
-      throw new Error("Datos corruptos")
-    }
+    console.log("USER:", user)
 
     const cont = document.getElementById("perfiles")
     cont.innerHTML = ""
 
-    user.perfiles.forEach(p => {
+    // 🔥 FIX: si no hay perfiles, crear uno automático
+    const perfiles = user.perfiles?.length
+      ? user.perfiles
+      : [{ nombre: "Principal", avatar: "👤" }]
+
+    perfiles.forEach(p => {
 
       const div = document.createElement("div")
       div.className = "perfil"
@@ -123,10 +124,10 @@ async function cargarPerfiles() {
 
           if (!res.ok) throw new Error()
 
-          // 🚀 REDIRECCIÓN LIMPIA
           window.location.href = "/index.html"
 
-        } catch {
+        } catch (err) {
+          console.error(err)
           alert("❌ Error al seleccionar perfil")
         }
       }
