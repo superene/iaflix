@@ -30,35 +30,21 @@ const SECRET = process.env.JWT_SECRET || "clave_secreta"
 /* =========================
    ☁️ CLOUDINARY
 ========================= */
-const cloudConfigured =
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
-
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
-let upload
-
-if (cloudConfigured) {
-  console.log("✅ Cloudinary activo")
-
-  const storage = new CloudinaryStorage({
+const upload = multer({
+  storage: new CloudinaryStorage({
     cloudinary,
     params: async () => ({
       folder: "iaflix",
       resource_type: "auto"
     })
   })
-
-  upload = multer({ storage })
-} else {
-  console.log("⚠️ Cloudinary OFF (modo local)")
-  upload = multer({ dest: "uploads/" })
-}
+})
 
 /* =========================
    🔒 AUTH
@@ -81,7 +67,7 @@ function auth(req, res, next) {
    🏠 HOME
 ========================= */
 app.get("/", (req, res) => {
-  res.send("IAFLIX backend funcionando 🚀")
+  res.send("IAFLIX API 🚀")
 })
 
 /* =========================
@@ -91,27 +77,16 @@ app.post("/register", async (req, res) => {
   try {
     const { username, password } = req.body
 
-    if (!username || !password) {
-      return res.status(400).json({ mensaje: "Datos incompletos" })
-    }
+    const existe = await User.findOne({ username })
+    if (existe) return res.status(400).json({ mensaje: "Ya existe" })
 
-    const existe = await User.findOne({ username: username.toLowerCase() })
-
-    if (existe) {
-      return res.status(400).json({ mensaje: "Usuario ya existe" })
-    }
-
-    const hash = bcrypt.hashSync(password, 8)
+    const hash = bcrypt.hashSync(password, 10)
 
     const user = new User({
-      username: username.toLowerCase(),
+      username,
       password: hash,
-      perfiles: [
-        { nombre: "Principal", avatar: "👤" }
-      ],
-      perfilActivo: null,
-      favoritos: [],
-      historial: []
+      perfiles: [{ nombre: "Principal", avatar: "👤" }],
+      perfilActivo: "Principal"
     })
 
     await user.save()
@@ -129,9 +104,7 @@ app.post("/register", async (req, res) => {
 ========================= */
 app.post("/login-user", async (req, res) => {
   try {
-    const user = await User.findOne({
-      username: req.body.username.toLowerCase()
-    })
+    const user = await User.findOne({ username: req.body.username })
 
     if (!user) return res.status(401).json({ mensaje: "No existe" })
 
@@ -152,7 +125,7 @@ app.post("/login-user", async (req, res) => {
 })
 
 /* =========================
-   👤 /ME (FIX PERFIL)
+   👤 /ME
 ========================= */
 app.get("/me", auth, async (req, res) => {
   try {
@@ -170,20 +143,19 @@ app.get("/me", auth, async (req, res) => {
 })
 
 /* =========================
-   🎭 SELECCIONAR PERFIL
+   🎭 PERFIL (FIX 502)
 ========================= */
 app.post("/perfil", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
 
     user.perfilActivo = req.body.nombre
-
     await user.save()
 
     res.json({ ok: true })
 
   } catch (err) {
-    console.error(err)
+    console.error("PERFIL ERROR:", err)
     res.status(500).json({ mensaje: "Error perfil" })
   }
 })
@@ -192,54 +164,16 @@ app.post("/perfil", auth, async (req, res) => {
    📺 SERIES
 ========================= */
 app.get("/series", async (req, res) => {
-  const data = await Serie.find().sort({ createdAt: -1 })
-  res.json(data)
-})
-
-/* =========================
-   ⭐ FAVORITOS
-========================= */
-app.post("/favoritos/:id", auth, async (req, res) => {
-  const user = await User.findById(req.user.id)
-
-  if (!user.favoritos.includes(req.params.id)) {
-    user.favoritos.push(req.params.id)
-    await user.save()
+  try {
+    const data = await Serie.find().sort({ createdAt: -1 })
+    res.json(data)
+  } catch {
+    res.status(500).json({ error: "Error" })
   }
-
-  res.json({ ok: true })
-})
-
-app.get("/favoritos", auth, async (req, res) => {
-  const user = await User.findById(req.user.id).populate("favoritos")
-  res.json(user.favoritos)
 })
 
 /* =========================
-   🕓 HISTORIAL
-========================= */
-app.post("/historial/:id", auth, async (req, res) => {
-  const user = await User.findById(req.user.id)
-
-  user.historial.push({
-    serie: req.params.id,
-    tiempo: req.body.tiempo
-  })
-
-  await user.save()
-
-  res.json({ ok: true })
-})
-
-app.get("/historial", auth, async (req, res) => {
-  const user = await User.findById(req.user.id)
-    .populate("historial.serie")
-
-  res.json(user.historial)
-})
-
-/* =========================
-   📤 UPLOAD
+   📤 UPLOAD (100% ESTABLE)
 ========================= */
 app.post("/upload", auth, (req, res) => {
 
@@ -249,31 +183,44 @@ app.post("/upload", auth, (req, res) => {
   ])(req, res, async (err) => {
 
     if (err) {
+      console.error(err)
       return res.status(500).json({ mensaje: err.message })
     }
 
     try {
-      const video = req.files.video[0].path
-      const portada = req.files.portada[0].path
+      const video = req.files.video?.[0]?.path
+      const portada = req.files.portada?.[0]?.path
+
+      if (!video || !portada) {
+        return res.status(400).json({ mensaje: "Faltan archivos" })
+      }
 
       const serie = new Serie({
         titulo: req.body.titulo,
         descripcion: req.body.descripcion,
         tipo: req.body.tipo,
-        portada,
-        video
+        video,
+        portada
       })
 
       await serie.save()
 
-      res.json({ ok: true })
+      res.json({ mensaje: "OK" })
 
-    } catch (e) {
-      res.status(500).json({ mensaje: e.message })
+    } catch (err) {
+      console.error(err)
+      res.status(500).json({ mensaje: "Error interno" })
     }
 
   })
+})
 
+/* =========================
+   🚨 ERROR GLOBAL
+========================= */
+app.use((err, req, res, next) => {
+  console.error("ERROR GLOBAL:", err)
+  res.status(500).json({ mensaje: "Error servidor" })
 })
 
 /* =========================
@@ -282,5 +229,5 @@ app.post("/upload", auth, (req, res) => {
 const PORT = process.env.PORT || 10000
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("🔥 SERVER RUNNING " + PORT)
+  console.log("🔥 corriendo en puerto " + PORT)
 })
