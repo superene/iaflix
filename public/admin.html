@@ -58,10 +58,10 @@ button:disabled { background:gray; }
 <div id="listaAdmin"></div>
 
 <form id="form">
-<input type="text" id="titulo" placeholder="Título" required>
-<textarea id="descripcion" placeholder="Descripción"></textarea>
+<input type="text" name="titulo" placeholder="Título" required>
+<textarea name="descripcion" placeholder="Descripción"></textarea>
 
-<select id="tipo" required>
+<select name="tipo" required>
   <option value="">Tipo</option>
   <option value="serie">Serie</option>
   <option value="pelicula">Película</option>
@@ -70,12 +70,12 @@ button:disabled { background:gray; }
 </select>
 
 <label>Portada</label>
-<input type="file" id="portadaInput" accept="image/*" required>
+<input type="file" name="portada" id="portadaInput" accept="image/*" required>
 
 <div id="preview"></div>
 
 <label>Video</label>
-<input type="file" id="videoInput" accept="video/*" required>
+<input type="file" name="video" accept="video/*" required>
 
 <button id="btnSubir">Subir</button>
 
@@ -86,9 +86,6 @@ button:disabled { background:gray; }
 const API = location.hostname.includes("localhost")
   ? "http://localhost:3000"
   : "https://iaflix.onrender.com"
-
-// 🔥 PON TU CLOUDINARY REAL
-const CLOUD_NAME = "dbba3ioj0"
 
 /* =========================
    🔐 VALIDAR ADMIN
@@ -186,7 +183,7 @@ document.getElementById("portadaInput").addEventListener("change", e => {
 })
 
 /* =========================
-   📤 SUBIDA PRO REAL
+   📤 SUBIDA REAL (SIN CLOUDINARY FRONT)
 ========================= */
 document.getElementById("form").onsubmit = async (e) => {
   e.preventDefault()
@@ -198,74 +195,19 @@ document.getElementById("form").onsubmit = async (e) => {
   status.innerText = "Subiendo..."
 
   try {
-    const videoFile = document.getElementById("videoInput").files[0]
-    const portadaFile = document.getElementById("portadaInput").files[0]
+    const formData = new FormData(e.target)
 
-    if (!videoFile || !portadaFile) {
-      alert("Faltan archivos")
-      btn.disabled = false
-      return
-    }
-
-    /* =========================
-       🎥 SUBIR VIDEO
-    ========================= */
-    const dataVideo = new FormData()
-    dataVideo.append("file", videoFile)
-    dataVideo.append("upload_preset", "iaflix_upload")
-
-    const resVideo = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/video/upload`,
-      { method: "POST", body: dataVideo }
-    )
-
-    const videoJson = await resVideo.json()
-
-    if (!videoJson.secure_url) {
-      throw new Error("Error subiendo video")
-    }
-
-    /* =========================
-       🖼️ SUBIR IMAGEN
-    ========================= */
-    const dataImg = new FormData()
-    dataImg.append("file", portadaFile)
-    dataImg.append("upload_preset", "iaflix_upload")
-
-    const resImg = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-      { method: "POST", body: dataImg }
-    )
-
-    const imgJson = await resImg.json()
-
-    if (!imgJson.secure_url) {
-      throw new Error("Error subiendo imagen")
-    }
-
-    /* =========================
-       💾 GUARDAR EN BACKEND
-    ========================= */
-    const resSave = await fetch(API + "/upload", {
+    const res = await fetch(API + "/upload", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         Authorization: "Bearer " + token
       },
-      body: JSON.stringify({
-        titulo: document.getElementById("titulo").value,
-        descripcion: document.getElementById("descripcion").value,
-        tipo: document.getElementById("tipo").value,
-        video: videoJson.secure_url,
-        portada: imgJson.secure_url
-      })
+      body: formData
     })
 
-    const saveData = await resSave.json()
+    const data = await res.json()
 
-    if (!resSave.ok) {
-      throw new Error(saveData.mensaje || "Error guardando")
-    }
+    if (!res.ok) throw new Error(data.mensaje)
 
     status.innerText = "✅ Subido correctamente"
     alert("🔥 Contenido subido PRO")

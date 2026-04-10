@@ -195,29 +195,39 @@ app.get("/series", async (req, res) => {
 /* =========================
    📤 UPLOAD (FINAL PRO)
 ========================= */
-app.post("/upload", auth, async (req, res) => {
+const multer = require("multer")
+const upload = multer({ dest: "uploads/" })
+
+app.post("/upload", auth, upload.fields([
+  { name: "video", maxCount: 1 },
+  { name: "portada", maxCount: 1 }
+]), async (req, res) => {
   try {
     if (req.user.role !== "admin") {
       return res.status(403).json({ mensaje: "No autorizado" })
     }
 
-    const { titulo, descripcion, tipo, video, portada } = req.body
+    const videoFile = req.files.video[0]
+    const portadaFile = req.files.portada[0]
 
-    if (!titulo || !video || !portada) {
-      return res.status(400).json({ mensaje: "Faltan datos" })
-    }
+    // subir a cloudinary desde backend
+    const videoUpload = await cloudinary.uploader.upload(videoFile.path, {
+      resource_type: "video"
+    })
+
+    const portadaUpload = await cloudinary.uploader.upload(portadaFile.path)
 
     const serie = new Serie({
-      titulo,
-      descripcion,
-      tipo,
-      video,
-      portada
+      titulo: req.body.titulo,
+      descripcion: req.body.descripcion,
+      tipo: req.body.tipo,
+      video: videoUpload.secure_url,
+      portada: portadaUpload.secure_url
     })
 
     await serie.save()
 
-    res.json({ mensaje: "Subido correctamente 🚀" })
+    res.json({ mensaje: "Subido PRO 🔥" })
 
   } catch (err) {
     console.error(err)
