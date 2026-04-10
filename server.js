@@ -19,9 +19,11 @@ const app = express()
 ========================= */
 app.use(cors())
 app.use(express.json())
+
+// servir frontend
 app.use(express.static(path.join(__dirname, "public")))
 
-// 🔥 IMPORTANTE: servir uploads local (fallback)
+// servir uploads locales
 app.use("/uploads", express.static(path.join(__dirname, "uploads")))
 
 /* =========================
@@ -37,29 +39,30 @@ const cloudConfigured =
   process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET
 
-if (!cloudConfigured) {
-  console.log("⚠️ Cloudinary NO configurado")
-} else {
+if (cloudConfigured) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  })
   console.log("✅ Cloudinary conectado")
+} else {
+  console.log("⚠️ Cloudinary NO configurado (modo local)")
 }
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-})
-
+/* =========================
+   📦 MULTER
+========================= */
 let upload
 
 if (cloudConfigured) {
   const storage = new CloudinaryStorage({
     cloudinary,
-    params: async (req, file) => ({
+    params: async () => ({
       folder: "iaflix",
       resource_type: "auto"
     })
   })
-
   upload = multer({ storage })
 } else {
   upload = multer({ dest: "uploads/" })
@@ -71,13 +74,22 @@ if (cloudConfigured) {
 function auth(req, res, next) {
   let token = req.headers.authorization
 
-  if (!token) return res.status(403).json({ mensaje: "Sin token" })
+  if (!token) {
+    return res.status(403).json({ mensaje: "Sin token" })
+  }
 
   try {
     token = token.replace("Bearer ", "")
-    req.user = jwt.verify(token, SECRET)
+    const decoded = jwt.verify(token, SECRET)
+
+    if (!decoded) {
+      return res.status(401).json({ mensaje: "Token inválido" })
+    }
+
+    req.user = decoded
     next()
-  } catch {
+
+  } catch (err) {
     return res.status(401).json({ mensaje: "Token inválido" })
   }
 }
@@ -90,7 +102,7 @@ app.get("/", (req, res) => {
 })
 
 /* =========================
-   👤 REGISTER (FIX 404)
+   👤 REGISTER
 ========================= */
 app.post("/register", async (req, res) => {
   try {
@@ -141,7 +153,7 @@ app.post("/login", (req, res) => {
 })
 
 /* =========================
-   👤 LOGIN USER (FIX)
+   👤 LOGIN USER
 ========================= */
 app.post("/login-user", async (req, res) => {
   try {
@@ -176,9 +188,7 @@ app.get("/me", auth, async (req, res) => {
     if (req.user.role === "admin") {
       return res.json({
         role: "admin",
-        perfiles: [
-          { nombre: "Admin", avatar: "👑" }
-        ]
+        perfiles: [{ nombre: "Admin", avatar: "👑" }]
       })
     }
 
@@ -190,12 +200,47 @@ app.get("/me", auth, async (req, res) => {
 
     res.json({
       role: "user",
-      perfiles: user.perfiles || []
+      perfiles: user.perfiles || [],
+      perfilActivo: user.perfilActivo || null
     })
 
   } catch (err) {
     console.error("ME ERROR:", err)
     res.status(500).json({ mensaje: "Error servidor" })
+  }
+})
+
+/* =========================
+   🎭 SELECCIONAR PERFIL (FIX 502)
+========================= */
+app.post("/perfil", auth, async (req, res) => {
+  try {
+    const { nombre } = req.body
+
+    if (!nombre) {
+      return res.status(400).json({ mensaje: "Nombre requerido" })
+    }
+
+    const user = await User.findById(req.user.id)
+
+    if (!user) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" })
+    }
+
+    const existe = user.perfiles.find(p => p.nombre === nombre)
+
+    if (!existe) {
+      return res.status(400).json({ mensaje: "Perfil inválido" })
+    }
+
+    user.perfilActivo = nombre
+    await user.save()
+
+    res.json({ ok: true })
+
+  } catch (err) {
+    console.error("PERFIL ERROR:", err)
+    res.status(500).json({ mensaje: "Error perfil" })
   }
 })
 
@@ -236,7 +281,7 @@ app.delete("/serie/:id", auth, async (req, res) => {
 })
 
 /* =========================
-   📤 UPLOAD (FIX FINAL)
+   📤 UPLOAD
 ========================= */
 app.post("/upload", auth, (req, res) => {
 
@@ -246,7 +291,7 @@ app.post("/upload", auth, (req, res) => {
   ])(req, res, async (err) => {
 
     if (err) {
-      console.error("💥 MULTER ERROR:", err)
+      console.error("MULTER ERROR:", err)
       return res.status(500).json({ mensaje: err.message })
     }
 
@@ -275,8 +320,8 @@ app.post("/upload", auth, (req, res) => {
       res.json({ mensaje: "Subido correctamente 🚀" })
 
     } catch (error) {
-      console.error("💥 ERROR:", error)
-      res.status(500).json({ mensaje: error.message })
+      console.error("UPLOAD ERROR:", error)
+      res.status(500).json({ mensaje: "Error upload" })
     }
 
   })
@@ -284,15 +329,15 @@ app.post("/upload", auth, (req, res) => {
 })
 
 /* =========================
-   🚨 ERROR GLOBAL (ANTI 502)
+   🚨 ERROR GLOBAL
 ========================= */
 app.use((err, req, res, next) => {
-  console.error("💥 ERROR GLOBAL:", err)
+  console.error("ERROR GLOBAL:", err)
   res.status(500).json({ mensaje: "Error interno servidor" })
 })
 
 /* =========================
-   🚀 SERVER
+   🚀 SERVER (FIX RENDER)
 ========================= */
 const PORT = process.env.PORT || 10000
 

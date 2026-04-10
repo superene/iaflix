@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>IAFLIX 🎬</title>
-<link rel="icon" href="/favicon.ico">
 
 <style>
 body {
@@ -86,8 +85,6 @@ video {
 <li onclick="filtrar('pelicula')">🎥 Películas</li>
 <li onclick="filtrar('musica')">🎵 Música</li>
 <li onclick="filtrar('anime')">🧩 Anime</li>
-<li onclick="verFavoritos()">⭐ Favoritos</li>
-<li onclick="verHistorial()">🕓 Historial</li>
 <li onclick="logout()">🚪 Cerrar sesión</li>
 </ul>
 
@@ -103,7 +100,6 @@ video {
     <p id="desc"></p>
 
     <button onclick="play()">▶️ Play</button>
-    <button onclick="fav()">⭐ Favorito</button>
   </div>
 </div>
 
@@ -116,7 +112,7 @@ video {
 <script>
 
 /* =========================
-   🌐 API DINÁMICA
+   🌐 API
 ========================= */
 const API = window.location.origin
 const token = localStorage.getItem("token")
@@ -139,9 +135,10 @@ async function checkPerfil() {
 
     const user = await res.json()
 
-    document.getElementById("user").innerText = user.username || ""
+    document.getElementById("user").innerText = user.username || "Usuario"
 
-    if (!user.perfilActivo || user.perfilActivo === "") {
+    // 🔥 FIX: validar perfil activo correctamente
+    if (!user.perfilActivo) {
       window.location.href = "/perfiles.html"
       return false
     }
@@ -149,7 +146,6 @@ async function checkPerfil() {
     return true
 
   } catch (err) {
-    console.log("Error sesión")
     localStorage.removeItem("token")
     window.location.href = "/login-user.html"
     return false
@@ -157,7 +153,7 @@ async function checkPerfil() {
 }
 
 /* =========================
-   🚀 INIT APP
+   🚀 INIT
 ========================= */
 let todas = []
 let actual = null
@@ -169,26 +165,19 @@ async function init() {
   if (!ok) return
 
   try {
-    const res = await fetch(API + "/series", {
-      headers: {
-        Authorization: "Bearer " + token
-      }
-    })
+    const res = await fetch(API + "/series")
 
     const data = await res.json()
 
-    if (!Array.isArray(data)) {
-      console.log("Error backend:", data)
-      return
-    }
+    if (!Array.isArray(data)) return
 
     todas = data
     renderFilas(data)
 
     if (data.length) select(data[0])
 
-  } catch (err) {
-    console.log("Error /series")
+  } catch {
+    console.log("Error cargando series")
   }
 }
 
@@ -201,27 +190,16 @@ function renderFilas(data){
   const cont = document.getElementById("lista")
   cont.innerHTML=""
 
-  const categorias = ["serie","pelicula","musica","anime"]
+  data.forEach(s=>{
+    const img = document.createElement("img")
+    img.src = s.portada
+    img.width = 150
+    img.style.borderRadius = "8px"
+    img.style.cursor = "pointer"
 
-  categorias.forEach(tipo=>{
-    const fila = data.filter(s=>s.tipo===tipo)
+    img.onclick = () => select(s)
 
-    if(!fila.length) return
-
-    const div = document.createElement("div")
-
-    div.innerHTML = `
-      <h2 style="margin-left:10px">${tipo.toUpperCase()}</h2>
-      <div style="display:flex;gap:10px;overflow-x:auto;padding:10px">
-        ${fila.map(s=>`
-          <img src="${s.portada}" width="150"
-          style="border-radius:8px;cursor:pointer"
-          onclick='select(${JSON.stringify(s)})'>
-        `).join("")}
-      </div>
-    `
-
-    cont.appendChild(div)
+    cont.appendChild(img)
   })
 }
 
@@ -243,46 +221,8 @@ function play(){
   if(!actual) return
 
   player.src = actual.video
-  player.play()
-
-  player.ontimeupdate = () => {
-    fetch(API + "/historial/"+actual._id,{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        Authorization:"Bearer "+token
-      },
-      body: JSON.stringify({
-        tiempo: player.currentTime
-      })
-    })
-  }
-}
-
-/* =========================
-   ▶️ AUTOPLAY
-========================= */
-player.onended = () => {
-  const index = todas.findIndex(s => s._id === actual._id)
-
-  if(index !== -1 && todas[index+1]){
-    select(todas[index+1])
-    play()
-  }
-}
-
-/* =========================
-   ⭐ FAVORITOS
-========================= */
-function fav(){
-  if(!actual) return
-
-  fetch(API + "/favoritos/"+actual._id,{
-    method:"POST",
-    headers:{ Authorization:"Bearer "+token }
-  })
-
-  alert("⭐ Guardado")
+  player.load()
+  player.play().catch(()=>{})
 }
 
 /* =========================
@@ -311,31 +251,6 @@ function inicio(){
 function filtrar(tipo){
   const filtradas = todas.filter(s => s.tipo === tipo)
   renderFilas(filtradas)
-}
-
-/* =========================
-   ⭐ FAVORITOS
-========================= */
-function verFavoritos(){
-  fetch(API + "/favoritos",{
-    headers:{ Authorization:"Bearer "+token }
-  })
-  .then(r=>r.json())
-  .then(renderFilas)
-}
-
-/* =========================
-   🕓 HISTORIAL
-========================= */
-function verHistorial(){
-  fetch(API + "/historial",{
-    headers:{ Authorization:"Bearer "+token }
-  })
-  .then(r=>r.json())
-  .then(data=>{
-    const lista = data.map(h => h.serie)
-    renderFilas(lista)
-  })
 }
 
 /* =========================
