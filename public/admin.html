@@ -45,6 +45,24 @@ button:disabled { background:gray; }
   border-bottom:1px solid #333;
   padding:10px;
 }
+
+/* 🔥 BARRA PRO */
+#barra {
+  width:300px;
+  margin:10px auto;
+  background:#333;
+  border-radius:10px;
+  overflow:hidden;
+  display:none;
+}
+
+#progreso {
+  height:20px;
+  width:0%;
+  background:red;
+  text-align:center;
+  font-size:12px;
+}
 </style>
 </head>
 
@@ -80,6 +98,12 @@ button:disabled { background:gray; }
 <button id="btnSubir">Subir</button>
 
 <p id="status"></p>
+
+<!-- 🔥 BARRA -->
+<div id="barra">
+  <div id="progreso">0%</div>
+</div>
+
 </form>
 
 <script>
@@ -124,12 +148,7 @@ const token = validarAdmin()
 async function cargarContenido() {
   try {
     const res = await fetch(API + "/series")
-
-    if (!res.ok) throw new Error("Error backend")
-
     const data = await res.json()
-
-    if (!Array.isArray(data)) return
 
     const cont = document.getElementById("listaAdmin")
     cont.innerHTML = ""
@@ -146,8 +165,8 @@ async function cargarContenido() {
       cont.appendChild(div)
     })
 
-  } catch (err) {
-    console.log("Error cargando contenido", err)
+  } catch {
+    console.log("Error cargando contenido")
   }
 }
 
@@ -158,15 +177,12 @@ async function eliminar(id) {
   if (!confirm("¿Eliminar contenido?")) return
 
   try {
-    const res = await fetch(API + "/serie/" + id, {
+    await fetch(API + "/serie/" + id, {
       method: "DELETE",
       headers: { Authorization: "Bearer " + token }
     })
 
-    const data = await res.json().catch(()=>({}))
-
-    alert(data.mensaje || "Eliminado")
-
+    alert("Eliminado")
     cargarContenido()
 
   } catch {
@@ -182,18 +198,19 @@ document.getElementById("portadaInput").addEventListener("change", e => {
   if (!file) return
 
   const url = URL.createObjectURL(file)
-
   document.getElementById("preview").innerHTML = `<img src="${url}">`
 })
 
 /* =========================
-   📤 SUBIDA PRO
+   📤 SUBIDA CON BARRA REAL
 ========================= */
-document.getElementById("form").onsubmit = async (e) => {
+document.getElementById("form").onsubmit = (e) => {
   e.preventDefault()
 
   const btn = document.getElementById("btnSubir")
   const status = document.getElementById("status")
+  const barra = document.getElementById("barra")
+  const progreso = document.getElementById("progreso")
 
   const video = document.getElementById("videoInput").files[0]
   const portada = document.getElementById("portadaInput").files[0]
@@ -203,39 +220,62 @@ document.getElementById("form").onsubmit = async (e) => {
     return
   }
 
+  const formData = new FormData(e.target)
+
   btn.disabled = true
+  barra.style.display = "block"
   status.innerText = "Subiendo..."
 
-  try {
-    const formData = new FormData(e.target)
+  const xhr = new XMLHttpRequest()
 
-    const res = await fetch(API + "/upload", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + token
-      },
-      body: formData
-    })
+  xhr.open("POST", API + "/upload", true)
+  xhr.setRequestHeader("Authorization", "Bearer " + token)
 
-    const data = await res.json().catch(()=>({}))
+  /* 📊 PROGRESO */
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const percent = Math.round((e.loaded / e.total) * 100)
 
-    if (!res.ok) throw new Error(data.mensaje || "Error servidor")
-
-    status.innerText = "✅ Subido correctamente"
-    alert("🔥 Contenido subido PRO")
-
-    e.target.reset()
-    document.getElementById("preview").innerHTML = ""
-
-    cargarContenido()
-
-  } catch (err) {
-    console.error(err)
-    status.innerText = "❌ Error"
-    alert(err.message || "Error subiendo contenido")
+      progreso.style.width = percent + "%"
+      progreso.innerText = percent + "%"
+    }
   }
 
-  btn.disabled = false
+  /* ✅ OK */
+  xhr.onload = () => {
+    btn.disabled = false
+
+    if (xhr.status === 200) {
+      status.innerText = "Procesando video..."
+
+      setTimeout(() => {
+        status.innerText = "✅ Subido correctamente"
+        alert("🔥 Contenido subido PRO")
+
+        document.getElementById("form").reset()
+        document.getElementById("preview").innerHTML = ""
+        progreso.style.width = "0%"
+        progreso.innerText = "0%"
+        barra.style.display = "none"
+
+        cargarContenido()
+      }, 1000)
+
+    } else {
+      console.error(xhr.responseText)
+      status.innerText = "❌ Error"
+      alert("Error servidor")
+    }
+  }
+
+  /* ❌ ERROR */
+  xhr.onerror = () => {
+    btn.disabled = false
+    status.innerText = "❌ Error de red"
+    alert("Error de conexión")
+  }
+
+  xhr.send(formData)
 }
 
 /* =========================
