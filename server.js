@@ -133,10 +133,11 @@ app.post("/upload", auth, upload.fields([
     const portadaFile = req.files.portada[0]
 
     console.log("📤 Subiendo video...")
-    const videoUpload = await cloudinary.uploader.upload(videoFile.path, {
-      resource_type: "video",
-      folder: "iaflix"
-    })
+   const videoUpload = await cloudinary.uploader.upload_large(videoFile.path, {
+  resource_type: "video",
+  folder: "iaflix",
+  chunk_size: 6000000 // 6MB chunks
+}) 
 
     console.log("📤 Subiendo portada...")
     const portadaUpload = await cloudinary.uploader.upload(portadaFile.path, {
