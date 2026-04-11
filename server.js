@@ -5,7 +5,6 @@ const bcrypt = require("bcryptjs")
 const path = require("path")
 const multer = require("multer")
 
-// ✅ IMPORTANTE (TE FALTABA)
 const cloudinary = require("cloudinary").v2
 
 require("./db")
@@ -22,7 +21,7 @@ app.use(express.json({ limit: "50mb" }))
 app.use(express.static(path.join(__dirname, "public")))
 
 /* =========================
-   ☁️ CLOUDINARY CONFIG (CLAVE)
+   ☁️ CLOUDINARY (UNA SOLA VEZ)
 ========================= */
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -30,7 +29,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
-console.log("☁️ Cloudinary configurado")
+console.log("☁️ Cloudinary listo")
 
 /* =========================
    🔑 SECRET
@@ -55,7 +54,7 @@ function auth(req, res, next) {
 }
 
 /* =========================
-   📦 MULTER
+   📦 MULTER (UNA VEZ)
 ========================= */
 const upload = multer({ dest: "uploads/" })
 
@@ -71,7 +70,7 @@ app.get("/", (req, res) => {
 ========================= */
 app.post("/login", (req, res) => {
   if (req.body.username === "admin" && req.body.password === "1234") {
-    const token = jwt.sign({ role: "admin" }, SECRET)
+    const token = jwt.sign({ role: "admin" }, SECRET, { expiresIn: "2h" })
     return res.json({ token })
   }
   res.status(401).json({ mensaje: "Error login" })
@@ -85,12 +84,13 @@ app.get("/series", async (req, res) => {
     const data = await Serie.find().sort({ createdAt: -1 })
     res.json(data)
   } catch (err) {
+    console.error(err)
     res.status(500).json({ error: "Error obteniendo series" })
   }
 })
 
 /* =========================
-   🗑️ DELETE (ARREGLADO)
+   🗑️ DELETE
 ========================= */
 app.delete("/serie/:id", auth, async (req, res) => {
   try {
@@ -113,53 +113,55 @@ app.delete("/serie/:id", auth, async (req, res) => {
 })
 
 /* =========================
-   📤 UPLOAD (FIX TOTAL)
+   📤 UPLOAD PRO
 ========================= */
-app.post("/upload", auth,
-  upload.fields([
-    { name: "video", maxCount: 1 },
-    { name: "portada", maxCount: 1 }
-  ]),
-  async (req, res) => {
-    try {
+app.post("/upload", auth, upload.fields([
+  { name: "video", maxCount: 1 },
+  { name: "portada", maxCount: 1 }
+]), async (req, res) => {
 
-      if (req.user.role !== "admin") {
-        return res.status(403).json({ mensaje: "No autorizado" })
-      }
-
-      if (!req.files || !req.files.video || !req.files.portada) {
-        return res.status(400).json({ mensaje: "Faltan archivos" })
-      }
-
-      const videoFile = req.files.video[0]
-      const portadaFile = req.files.portada[0]
-
-      console.log("📤 Subiendo video...")
-      const videoUpload = await cloudinary.uploader.upload(videoFile.path, {
-        resource_type: "video"
-      })
-
-      console.log("🖼️ Subiendo portada...")
-      const portadaUpload = await cloudinary.uploader.upload(portadaFile.path)
-
-      const serie = new Serie({
-        titulo: req.body.titulo,
-        descripcion: req.body.descripcion,
-        tipo: req.body.tipo,
-        video: videoUpload.secure_url,
-        portada: portadaUpload.secure_url
-      })
-
-      await serie.save()
-
-      res.json({ mensaje: "Subido correctamente 🔥" })
-
-    } catch (err) {
-      console.error("💥 ERROR UPLOAD:", err)
-      res.status(500).json({ mensaje: "Error servidor" })
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ mensaje: "No autorizado" })
     }
+
+    if (!req.files || !req.files.video || !req.files.portada) {
+      return res.status(400).json({ mensaje: "Faltan archivos" })
+    }
+
+    const videoFile = req.files.video[0]
+    const portadaFile = req.files.portada[0]
+
+    console.log("📤 Subiendo video...")
+    const videoUpload = await cloudinary.uploader.upload(videoFile.path, {
+      resource_type: "video",
+      folder: "iaflix"
+    })
+
+    console.log("📤 Subiendo portada...")
+    const portadaUpload = await cloudinary.uploader.upload(portadaFile.path, {
+      folder: "iaflix"
+    })
+
+    console.log("✅ Archivos subidos")
+
+    const serie = new Serie({
+      titulo: req.body.titulo,
+      descripcion: req.body.descripcion,
+      tipo: req.body.tipo,
+      video: videoUpload.secure_url,
+      portada: portadaUpload.secure_url
+    })
+
+    await serie.save()
+
+    res.json({ mensaje: "Subido PRO 🔥" })
+
+  } catch (err) {
+    console.error("💥 ERROR UPLOAD:", err)
+    res.status(500).json({ mensaje: "Error servidor" })
   }
-)
+})
 
 /* =========================
    🚀 SERVER
