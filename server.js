@@ -32,11 +32,11 @@ cloudinary.config({
 console.log("☁️ Cloudinary listo")
 
 /* =========================
-   📦 MULTER (PRO)
+   📦 MULTER
 ========================= */
 const upload = multer({
   dest: "uploads/",
-  limits: { fileSize: 1000 * 1024 * 1024 } // 1GB
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB
 })
 
 /* =========================
@@ -109,34 +109,28 @@ app.delete("/serie/:id", auth, async (req, res) => {
 })
 
 /* =========================
-   📤 UPLOAD PRO REAL (FIX TOTAL)
+   📤 UPLOAD PRO
 ========================= */
 app.post("/upload", auth, upload.fields([
   { name: "video", maxCount: 1 },
   { name: "portada", maxCount: 1 }
 ]), async (req, res) => {
 
-  let videoPath = null
-  let portadaPath = null
-
   try {
     if (req.user.role !== "admin") {
       return res.status(403).json({ mensaje: "No autorizado" })
     }
 
-    if (!req.files || !req.files.video || !req.files.portada) {
+    if (!req.files?.video || !req.files?.portada) {
       return res.status(400).json({ mensaje: "Faltan archivos" })
     }
 
     const videoFile = req.files.video[0]
     const portadaFile = req.files.portada[0]
 
-    videoPath = videoFile.path
-    portadaPath = portadaFile.path
-
     console.log("📤 Subiendo video...")
 
-    const videoUpload = await cloudinary.uploader.upload_large(videoPath, {
+    const videoUpload = await cloudinary.uploader.upload_large(videoFile.path, {
       resource_type: "video",
       folder: "iaflix",
       chunk_size: 6000000
@@ -144,11 +138,13 @@ app.post("/upload", auth, upload.fields([
 
     console.log("📤 Subiendo portada...")
 
-    const portadaUpload = await cloudinary.uploader.upload(portadaPath, {
+    const portadaUpload = await cloudinary.uploader.upload(portadaFile.path, {
       folder: "iaflix"
     })
 
-    console.log("✅ Subido a Cloudinary")
+    // 🧹 borrar archivos locales
+    fs.unlinkSync(videoFile.path)
+    fs.unlinkSync(portadaFile.path)
 
     const serie = new Serie({
       titulo: req.body.titulo,
@@ -163,13 +159,8 @@ app.post("/upload", auth, upload.fields([
     res.json({ mensaje: "Subido PRO 🔥" })
 
   } catch (err) {
-    console.error("💥 ERROR REAL:", err.message)
-    res.status(500).json({ mensaje: err.message })
-
-  } finally {
-    // 🔥 LIMPIAR ARCHIVOS TEMPORALES (IMPORTANTE)
-    if (videoPath && fs.existsSync(videoPath)) fs.unlinkSync(videoPath)
-    if (portadaPath && fs.existsSync(portadaPath)) fs.unlinkSync(portadaPath)
+    console.error("💥 ERROR UPLOAD:", err)
+    res.status(500).json({ mensaje: "Error servidor" })
   }
 })
 
@@ -178,6 +169,6 @@ app.post("/upload", auth, upload.fields([
 ========================= */
 const PORT = process.env.PORT || 10000
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log("🔥 SERVER RUNNING " + PORT)
 })
