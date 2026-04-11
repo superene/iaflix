@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
 const path = require("path")
 const multer = require("multer")
+const streamifier = require("streamifier")
 
 const cloudinary = require("cloudinary").v2
 
@@ -21,7 +22,7 @@ app.use(express.json({ limit: "50mb" }))
 app.use(express.static(path.join(__dirname, "public")))
 
 /* =========================
-   ☁️ CLOUDINARY (UNA SOLA VEZ)
+   ☁️ CLOUDINARY
 ========================= */
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -54,9 +55,32 @@ function auth(req, res, next) {
 }
 
 /* =========================
-   📦 MULTER (UNA VEZ)
+   📦 MULTER (MEMORY STORAGE PRO)
 ========================= */
-const upload = multer({ dest: "uploads/" })
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 } // 200MB
+})
+
+/* =========================
+   ☁️ SUBIR BUFFER A CLOUDINARY
+========================= */
+function subirBuffer(buffer, tipo) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: tipo,
+        folder: "iaflix"
+      },
+      (error, result) => {
+        if (error) return reject(error)
+        resolve(result)
+      }
+    )
+
+    streamifier.createReadStream(buffer).pipe(stream)
+  })
+}
 
 /* =========================
    🏠 HOME
@@ -113,7 +137,7 @@ app.delete("/serie/:id", auth, async (req, res) => {
 })
 
 /* =========================
-   📤 UPLOAD PRO
+   📤 UPLOAD PRO FINAL
 ========================= */
 app.post("/upload", auth, upload.fields([
   { name: "video", maxCount: 1 },
@@ -133,16 +157,10 @@ app.post("/upload", auth, upload.fields([
     const portadaFile = req.files.portada[0]
 
     console.log("📤 Subiendo video...")
-   const videoUpload = await cloudinary.uploader.upload_large(videoFile.path, {
-  resource_type: "video",
-  folder: "iaflix",
-  chunk_size: 6000000 // 6MB chunks
-}) 
+    const videoUpload = await subirBuffer(videoFile.buffer, "video")
 
     console.log("📤 Subiendo portada...")
-    const portadaUpload = await cloudinary.uploader.upload(portadaFile.path, {
-      folder: "iaflix"
-    })
+    const portadaUpload = await subirBuffer(portadaFile.buffer, "image")
 
     console.log("✅ Archivos subidos")
 
@@ -160,7 +178,11 @@ app.post("/upload", auth, upload.fields([
 
   } catch (err) {
     console.error("💥 ERROR UPLOAD:", err)
-    res.status(500).json({ mensaje: "Error servidor" })
+
+    res.status(500).json({
+      mensaje: "Error servidor",
+      error: err.message
+    })
   }
 })
 
