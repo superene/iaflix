@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs")
 const path = require("path")
 const multer = require("multer")
 
+// ✅ IMPORTANTE (TE FALTABA)
 const cloudinary = require("cloudinary").v2
 
 require("./db")
@@ -21,7 +22,7 @@ app.use(express.json({ limit: "50mb" }))
 app.use(express.static(path.join(__dirname, "public")))
 
 /* =========================
-   ☁️ CLOUDINARY CONFIG
+   ☁️ CLOUDINARY CONFIG (CLAVE)
 ========================= */
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -29,7 +30,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
-console.log("☁️ Cloudinary listo")
+console.log("☁️ Cloudinary configurado")
 
 /* =========================
    🔑 SECRET
@@ -66,32 +67,6 @@ app.get("/", (req, res) => {
 })
 
 /* =========================
-   👤 REGISTER
-========================= */
-app.post("/register", async (req, res) => {
-  try {
-    const { username, password } = req.body
-
-    const hash = bcrypt.hashSync(password, 8)
-
-    const user = new User({
-      username,
-      password: hash,
-      perfiles: [
-        { nombre: "Principal", avatar: "👤" }
-      ],
-      perfilActivo: null
-    })
-
-    await user.save()
-    res.json({ mensaje: "Usuario creado" })
-
-  } catch (err) {
-    res.status(500).json({ mensaje: "Error servidor" })
-  }
-})
-
-/* =========================
    🔐 LOGIN ADMIN
 ========================= */
 app.post("/login", (req, res) => {
@@ -103,73 +78,42 @@ app.post("/login", (req, res) => {
 })
 
 /* =========================
-   👤 LOGIN USER
-========================= */
-app.post("/login-user", async (req, res) => {
-  const user = await User.findOne({ username: req.body.username })
-
-  if (!user) return res.status(401).json({ mensaje: "No existe" })
-
-  const valid = bcrypt.compareSync(req.body.password, user.password)
-  if (!valid) return res.status(401).json({ mensaje: "Incorrecto" })
-
-  const token = jwt.sign({ id: user._id, role: "user" }, SECRET)
-
-  res.json({ token })
-})
-
-/* =========================
-   👤 /ME
-========================= */
-app.get("/me", auth, async (req, res) => {
-  if (req.user.role === "admin") {
-    return res.json({
-      username: "admin",
-      role: "admin",
-      perfiles: [{ nombre: "Admin", avatar: "👑" }],
-      perfilActivo: "Admin"
-    })
-  }
-
-  const user = await User.findById(req.user.id)
-
-  res.json({
-    username: user.username,
-    perfiles: user.perfiles,
-    perfilActivo: user.perfilActivo
-  })
-})
-
-/* =========================
-   🎭 PERFIL
-========================= */
-app.post("/perfil", auth, async (req, res) => {
-  const user = await User.findById(req.user.id)
-
-  user.perfilActivo = req.body.nombre
-  await user.save()
-
-  res.json({ ok: true })
-})
-
-/* =========================
    📺 SERIES
 ========================= */
 app.get("/series", async (req, res) => {
-  const data = await Serie.find().sort({ createdAt: -1 })
-  res.json(data)
+  try {
+    const data = await Serie.find().sort({ createdAt: -1 })
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: "Error obteniendo series" })
+  }
 })
 
 /* =========================
-   🗑️ DELETE (FIX 404)
+   🗑️ DELETE (ARREGLADO)
 ========================= */
 app.delete("/serie/:id", auth, async (req, res) => {
-  await Serie.findByIdAndDelete(req.params.id)
-  res.json({ mensaje: "Eliminado" })
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ mensaje: "No autorizado" })
+    }
+
+    const eliminado = await Serie.findByIdAndDelete(req.params.id)
+
+    if (!eliminado) {
+      return res.status(404).json({ mensaje: "No encontrado" })
+    }
+
+    res.json({ mensaje: "Eliminado correctamente" })
+
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ mensaje: "Error eliminando" })
+  }
 })
 
 /* =========================
-   📤 UPLOAD (FUNCIONANDO)
+   📤 UPLOAD (FIX TOTAL)
 ========================= */
 app.post("/upload", auth,
   upload.fields([
@@ -183,13 +127,19 @@ app.post("/upload", auth,
         return res.status(403).json({ mensaje: "No autorizado" })
       }
 
+      if (!req.files || !req.files.video || !req.files.portada) {
+        return res.status(400).json({ mensaje: "Faltan archivos" })
+      }
+
       const videoFile = req.files.video[0]
       const portadaFile = req.files.portada[0]
 
+      console.log("📤 Subiendo video...")
       const videoUpload = await cloudinary.uploader.upload(videoFile.path, {
         resource_type: "video"
       })
 
+      console.log("🖼️ Subiendo portada...")
       const portadaUpload = await cloudinary.uploader.upload(portadaFile.path)
 
       const serie = new Serie({
@@ -205,7 +155,7 @@ app.post("/upload", auth,
       res.json({ mensaje: "Subido correctamente 🔥" })
 
     } catch (err) {
-      console.error("UPLOAD ERROR:", err)
+      console.error("💥 ERROR UPLOAD:", err)
       res.status(500).json({ mensaje: "Error servidor" })
     }
   }
