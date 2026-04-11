@@ -4,8 +4,6 @@ const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
 const path = require("path")
 const multer = require("multer")
-const streamifier = require("streamifier")
-
 const cloudinary = require("cloudinary").v2
 
 require("./db")
@@ -33,6 +31,14 @@ cloudinary.config({
 console.log("☁️ Cloudinary listo")
 
 /* =========================
+   📦 MULTER (IMPORTANTE)
+========================= */
+const upload = multer({
+  dest: "uploads/",
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB
+})
+
+/* =========================
    🔑 SECRET
 ========================= */
 const SECRET = process.env.JWT_SECRET || "clave_secreta"
@@ -55,41 +61,6 @@ function auth(req, res, next) {
 }
 
 /* =========================
-   📦 MULTER (MEMORY STORAGE PRO)
-========================= */
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 200 * 1024 * 1024 } // 200MB
-})
-
-/* =========================
-   ☁️ SUBIR BUFFER A CLOUDINARY
-========================= */
-function subirBuffer(buffer, tipo) {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        resource_type: tipo,
-        folder: "iaflix"
-      },
-      (error, result) => {
-        if (error) return reject(error)
-        resolve(result)
-      }
-    )
-
-    streamifier.createReadStream(buffer).pipe(stream)
-  })
-}
-
-/* =========================
-   🏠 HOME
-========================= */
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"))
-})
-
-/* =========================
    🔐 LOGIN ADMIN
 ========================= */
 app.post("/login", (req, res) => {
@@ -108,7 +79,6 @@ app.get("/series", async (req, res) => {
     const data = await Serie.find().sort({ createdAt: -1 })
     res.json(data)
   } catch (err) {
-    console.error(err)
     res.status(500).json({ error: "Error obteniendo series" })
   }
 })
@@ -131,13 +101,12 @@ app.delete("/serie/:id", auth, async (req, res) => {
     res.json({ mensaje: "Eliminado correctamente" })
 
   } catch (err) {
-    console.error(err)
     res.status(500).json({ mensaje: "Error eliminando" })
   }
 })
 
 /* =========================
-   📤 UPLOAD PRO FINAL
+   📤 UPLOAD PRO REAL
 ========================= */
 app.post("/upload", auth, upload.fields([
   { name: "video", maxCount: 1 },
@@ -149,7 +118,7 @@ app.post("/upload", auth, upload.fields([
       return res.status(403).json({ mensaje: "No autorizado" })
     }
 
-    if (!req.files || !req.files.video || !req.files.portada) {
+    if (!req.files?.video || !req.files?.portada) {
       return res.status(400).json({ mensaje: "Faltan archivos" })
     }
 
@@ -157,12 +126,18 @@ app.post("/upload", auth, upload.fields([
     const portadaFile = req.files.portada[0]
 
     console.log("📤 Subiendo video...")
-    const videoUpload = await subirBuffer(videoFile.buffer, "video")
+
+    const videoUpload = await cloudinary.uploader.upload_large(videoFile.path, {
+      resource_type: "video",
+      folder: "iaflix",
+      chunk_size: 6000000
+    })
 
     console.log("📤 Subiendo portada...")
-    const portadaUpload = await subirBuffer(portadaFile.buffer, "image")
 
-    console.log("✅ Archivos subidos")
+    const portadaUpload = await cloudinary.uploader.upload(portadaFile.path, {
+      folder: "iaflix"
+    })
 
     const serie = new Serie({
       titulo: req.body.titulo,
@@ -178,11 +153,7 @@ app.post("/upload", auth, upload.fields([
 
   } catch (err) {
     console.error("💥 ERROR UPLOAD:", err)
-
-    res.status(500).json({
-      mensaje: "Error servidor",
-      error: err.message
-    })
+    res.status(500).json({ mensaje: "Error servidor" })
   }
 })
 
