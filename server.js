@@ -4,7 +4,6 @@ const jwt = require("jsonwebtoken")
 const bcrypt = require("bcryptjs")
 const path = require("path")
 const multer = require("multer")
-const fs = require("fs")
 const cloudinary = require("cloudinary").v2
 
 require("./db")
@@ -18,7 +17,6 @@ const app = express()
 ========================= */
 app.use(cors())
 app.use(express.json({ limit: "50mb" }))
-app.use(express.urlencoded({ extended: true }))
 app.use(express.static(path.join(__dirname, "public")))
 
 /* =========================
@@ -37,7 +35,7 @@ console.log("☁️ Cloudinary listo")
 ========================= */
 const upload = multer({
   dest: "uploads/",
-  limits: { fileSize: 200 * 1024 * 1024 } // 200MB máximo
+  limits: { fileSize: 500 * 1024 * 1024 }
 })
 
 /* =========================
@@ -63,26 +61,21 @@ function auth(req, res, next) {
 }
 
 /* =========================
-   🔐 REGISTER
+   👤 REGISTER USER
 ========================= */
 app.post("/register", async (req, res) => {
   try {
     const { username, password } = req.body
 
-    if (!username || !password) {
-      return res.status(400).json({ mensaje: "Faltan datos" })
-    }
+    const existe = await User.findOne({ username })
+    if (existe) return res.status(400).json({ mensaje: "Usuario ya existe" })
 
-    const existe = await User.findOne({ username: username.toLowerCase() })
-    if (existe) {
-      return res.status(400).json({ mensaje: "Usuario ya existe" })
-    }
-
-    const hash = bcrypt.hashSync(password, 10)
+    const hash = await bcrypt.hash(password, 10)
 
     const user = new User({
-      username: username.toLowerCase(),
-      password: hash
+      username,
+      password: hash,
+      perfiles: [{ nombre: "Principal", avatar: "👤" }]
     })
 
     await user.save()
@@ -90,8 +83,7 @@ app.post("/register", async (req, res) => {
     res.json({ mensaje: "Usuario creado" })
 
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ mensaje: "Error servidor" })
+    res.status(500).json({ mensaje: "Error registro" })
   }
 })
 
@@ -100,14 +92,13 @@ app.post("/register", async (req, res) => {
 ========================= */
 app.post("/login-user", async (req, res) => {
   try {
-    const user = await User.findOne({
-      username: req.body.username.toLowerCase()
-    })
+    const { username, password } = req.body
 
-    if (!user) return res.status(401).json({ mensaje: "No existe" })
+    const user = await User.findOne({ username })
+    if (!user) return res.status(400).json({ mensaje: "No existe" })
 
-    const valid = bcrypt.compareSync(req.body.password, user.password)
-    if (!valid) return res.status(401).json({ mensaje: "Incorrecto" })
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) return res.status(400).json({ mensaje: "Incorrecto" })
 
     const token = jwt.sign(
       { id: user._id, role: "user" },
@@ -117,9 +108,49 @@ app.post("/login-user", async (req, res) => {
 
     res.json({ token })
 
+  } catch {
+    res.status(500).json({ mensaje: "Error login" })
+  }
+})
+
+/* =========================
+   👤 OBTENER USUARIO
+========================= */
+app.get("/me", auth, async (req, res) => {
+  try {
+    console.log("📥 /me funcionando")
+
+    const user = await User.findById(req.user.id).select("-password")
+
+    if (!user) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" })
+    }
+
+    res.json(user)
+
   } catch (err) {
     console.error(err)
-    res.status(500).json({ mensaje: "Error servidor" })
+    res.status(500).json({ mensaje: "Error usuario" })
+  }
+})
+
+/* =========================
+   🎭 SELECCIONAR PERFIL
+========================= */
+app.post("/perfil", auth, async (req, res) => {
+  try {
+    const { nombre } = req.body
+
+    const user = await User.findById(req.user.id)
+    if (!user) return res.status(404).json({ mensaje: "No encontrado" })
+
+    user.perfilActivo = nombre
+    await user.save()
+
+    res.json({ mensaje: "Perfil seleccionado" })
+
+  } catch {
+    res.status(500).json({ mensaje: "Error perfil" })
   }
 })
 
@@ -138,40 +169,24 @@ app.post("/login", (req, res) => {
    📺 SERIES
 ========================= */
 app.get("/series", async (req, res) => {
-  try {
-    const data = await Serie.find().sort({ createdAt: -1 })
-    res.json(data)
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ mensaje: "Error obteniendo contenido" })
-  }
+  const data = await Serie.find().sort({ createdAt: -1 })
+  res.json(data)
 })
 
 /* =========================
    🗑️ DELETE
 ========================= */
 app.delete("/serie/:id", auth, async (req, res) => {
-  try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ mensaje: "No autorizado" })
-    }
-
-    const eliminado = await Serie.findByIdAndDelete(req.params.id)
-
-    if (!eliminado) {
-      return res.status(404).json({ mensaje: "No encontrado" })
-    }
-
-    res.json({ mensaje: "Eliminado correctamente" })
-
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ mensaje: "Error eliminando" })
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ mensaje: "No autorizado" })
   }
+
+  await Serie.findByIdAndDelete(req.params.id)
+  res.json({ mensaje: "Eliminado" })
 })
 
 /* =========================
-   📤 UPLOAD (ESTABLE)
+   📤 UPLOAD
 ========================= */
 app.post("/upload", auth, upload.fields([
   { name: "video", maxCount: 1 },
@@ -183,32 +198,19 @@ app.post("/upload", auth, upload.fields([
       return res.status(403).json({ mensaje: "No autorizado" })
     }
 
-    if (!req.files?.video || !req.files?.portada) {
-      return res.status(400).json({ mensaje: "Faltan archivos" })
-    }
-
-    console.log("FILES:", req.files)
-    console.log("BODY:", req.body)
-
-    const videoFile = req.files.video[0]
-    const portadaFile = req.files.portada[0]
+    const video = req.files.video[0]
+    const portada = req.files.portada[0]
 
     console.log("📤 Subiendo video...")
 
-    const videoUpload = await cloudinary.uploader.upload(videoFile.path, {
+    const videoUpload = await cloudinary.uploader.upload_large(video.path, {
       resource_type: "video",
-      folder: "iaflix"
+      chunk_size: 6000000
     })
 
     console.log("📤 Subiendo portada...")
 
-    const portadaUpload = await cloudinary.uploader.upload(portadaFile.path, {
-      folder: "iaflix"
-    })
-
-    // 🧹 borrar archivos temporales
-    fs.unlinkSync(videoFile.path)
-    fs.unlinkSync(portadaFile.path)
+    const portadaUpload = await cloudinary.uploader.upload(portada.path)
 
     const serie = new Serie({
       titulo: req.body.titulo,
@@ -223,7 +225,7 @@ app.post("/upload", auth, upload.fields([
     res.json({ mensaje: "Subido PRO 🔥" })
 
   } catch (err) {
-    console.error("💥 ERROR UPLOAD:", err)
+    console.error(err)
     res.status(500).json({ mensaje: "Error servidor" })
   }
 })
