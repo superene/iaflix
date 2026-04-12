@@ -74,7 +74,7 @@ const token = localStorage.getItem("token")
 ========================= */
 if (!token || token === "null" || token === "undefined") {
   localStorage.removeItem("token")
-  window.location.href = "/login-user.html"
+  window.location.href = "/login-users.html"
 }
 
 /* =========================
@@ -139,7 +139,7 @@ async function cargarPerfiles() {
     console.log("ERROR:", err.message)
 
     localStorage.removeItem("token")
-    window.location.href = "/login-user.html"
+    window.location.href = "/login-users.html"
   }
 }
 
